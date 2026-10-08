@@ -32,6 +32,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/dashboard', [DashboardController::class, 'index']);
         Route::get('/products', [CatalogController::class, 'products']);
+        Route::get('/catalog/references', [CatalogController::class, 'references']);
         Route::post('/products', [CatalogController::class, 'storeProduct']);
         Route::get('/customers', [CustomerController::class, 'index']);
         Route::get('/suppliers', [SupplierController::class, 'index']);

@@ -13,7 +13,7 @@ type Dashboard={sales:number;purchases:number;collections:number;expenses:number
 
 const nav=[
   ["الرئيسية","/",LayoutDashboard],["المبيعات","/sales",CircleDollarSign],["العملاء","/customers",Users],["المشتريات","/purchases",ClipboardList],
-  ["المخزون","/inventory",Package],["المستودعات","/locations",Warehouse],["السيارات والتوزيع","/trips",Truck],["الموردين","/suppliers",Users],
+  ["المخزون","/inventory",Package],["الأصناف","/products",Package],["المستودعات","/locations",Warehouse],["السيارات والتوزيع","/trips",Truck],["الموردين","/suppliers",Users],
   ["التحصيلات","/payments",WalletCards],["المرتجعات","/returns",FileText],["التقارير","/reports",BarChart3]
 ] as const;
 
