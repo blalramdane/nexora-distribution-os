@@ -125,7 +125,7 @@ return new class extends Migration
             $table->unique(['organization_id', 'code']);
             $table->index(['organization_id', 'normalized_name']);
             $table->index(['organization_id', 'phone']);
-            $table->index(['organization_id', 'governorate_id', 'center_id', 'city_area_id']);
+            $table->index(['organization_id', 'governorate_id', 'center_id', 'city_area_id'], 'cust_org_geo_idx');
         });
 
         Schema::create('customer_addresses', function (Blueprint $table): void {
