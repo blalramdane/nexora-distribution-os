@@ -24,15 +24,20 @@ class PermissionSeeder extends Seeder
         ];
 
         foreach ($permissions as $permission) {
-            DB::table('permissions')->updateOrInsert(
-                ['key' => $permission['key']],
-                [
-                    'id' => (string) Str::ulid(),
+            DB::table('permissions')->insertOrIgnore([
+                'id' => (string) Str::ulid(),
+                'key' => $permission['key'],
+                'name' => $permission['name'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            DB::table('permissions')
+                ->where('key', $permission['key'])
+                ->update([
                     'name' => $permission['name'],
                     'updated_at' => now(),
-                    'created_at' => now(),
-                ]
-            );
+                ]);
         }
     }
 }
