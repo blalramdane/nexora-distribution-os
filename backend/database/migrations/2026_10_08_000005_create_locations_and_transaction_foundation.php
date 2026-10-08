@@ -121,7 +121,7 @@ return new class extends Migration
             $table->timestamp('posted_at')->nullable();
             $table->timestamps();
             $table->index(['organization_id', 'account_id', 'occurred_at']);
-            $table->index(['organization_id', 'transaction_uuid'], 'stock_mov_tx_idx');
+            $table->index(['organization_id', 'transaction_uuid'], 'ledger_tx_idx');
 
 
 
@@ -147,7 +147,7 @@ return new class extends Migration
             $table->timestamps();
             $table->index(['organization_id', 'product_id', 'location_id', 'occurred_at'], 'stock_mov_org_prod_loc_time_idx');
             $table->index(['organization_id', 'source_document_type', 'source_document_id'], 'stock_mov_org_source_idx');
-            $table->index(['organization_id', 'transaction_uuid']);
+            $table->index(['organization_id', 'transaction_uuid'], 'stock_mov_tx_idx');
 
 
         });
