@@ -57,7 +57,7 @@ final class SyncController extends Controller
         );
         $payloadHash = hash('sha256', $payloadJson);
 
-        return DB::transaction(function () use ($data, $organizationId, $device, $request, $payloadHash) {
+        return DB::transaction(function () use ($data, $organizationId, $device, $request, $payloadHash, $posting) {
             $existing = DB::table('sync_operations')
                 ->where('organization_id', $organizationId)
                 ->where('operation_uuid', $data['operation_uuid'])
