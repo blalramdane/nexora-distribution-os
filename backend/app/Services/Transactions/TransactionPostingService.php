@@ -96,7 +96,8 @@ final class TransactionPostingService
                 $oldQty = (string) ($balance->quantity_base ?? 0);
                 $oldAvg = (string) ($balance->average_cost ?? $item['unitCost']);
                 $newQty = bcadd($oldQty, $item['quantityBase'], 6);
-                $incomingCost = bcmul($item['unitCost'], $item['quantityBase'], 4);
+                $unitCostBase = bcdiv($item['unitCost'], $item['conversion'], 4);
+                $incomingCost = bcmul($unitCostBase, $item['quantityBase'], 4);
                 $oldValue = bcmul($oldAvg, $oldQty, 4);
                 $newAvg = bccomp($newQty, '0', 6) === 0 ? '0.0000' : bcdiv(bcadd($oldValue, $incomingCost, 4), $newQty, 4);
 
@@ -117,7 +118,7 @@ final class TransactionPostingService
                     'id'=>(string) Str::ulid(),'organization_id'=>$organizationId,
                     'transaction_uuid'=>(string) Str::uuid(),'product_id'=>$item['product']->id,
                     'location_id'=>$location->id,'movement_type'=>'purchase_receipt',
-                    'quantity_base'=>$item['quantityBase'],'unit_cost'=>$item['unitCost'],
+                    'quantity_base'=>$item['quantityBase'],'unit_cost'=>$unitCostBase,
                     'source_document_type'=>'purchase_invoice','source_document_id'=>$invoiceId,
                     'occurred_at'=>now(),'posted_at'=>now(),'created_by'=>$data['created_by'] ?? null,
                     'device_id'=>$data['device_id'] ?? null,'reference'=>$documentNumber,
@@ -828,6 +829,42 @@ final class TransactionPostingService
             $this->completeIdempotency($organizationId,'payment.post',$data['idempotency_key'] ?? null,'payment:'.$paymentId);
             return $result;
         }, attempts:5);
+    }
+
+    private function adjustCustomerBalanceSummary(string $organizationId,string $customerId,array $deltas,bool $sale,string $timestampColumn='last_sale_at'): void
+    {
+        DB::table('customer_balance_summaries')->insertOrIgnore([
+            'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'customer_id'=>$customerId,
+            'total_sales'=>0,'total_returns'=>0,'total_paid'=>0,'outstanding'=>0,'updated_at'=>now(),
+        ]);
+        foreach ($deltas as $column=>$delta) {
+            if (bccomp((string)$delta,'0',4) >= 0) {
+                DB::table('customer_balance_summaries')->where('organization_id',$organizationId)->where('customer_id',$customerId)->increment($column,(float)$delta);
+            } else {
+                DB::table('customer_balance_summaries')->where('organization_id',$organizationId)->where('customer_id',$customerId)->decrement($column,(float)bcsub('0',(string)$delta,4));
+            }
+        }
+        DB::table('customer_balance_summaries')->where('organization_id',$organizationId)->where('customer_id',$customerId)->update([
+            $timestampColumn=>now(),'updated_at'=>now(),
+        ]);
+    }
+
+    private function adjustSupplierBalanceSummary(string $organizationId,string $supplierId,array $deltas,bool $purchase,string $timestampColumn='last_purchase_at'): void
+    {
+        DB::table('supplier_balance_summaries')->insertOrIgnore([
+            'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'supplier_id'=>$supplierId,
+            'total_purchases'=>0,'total_returns'=>0,'total_paid'=>0,'outstanding'=>0,'updated_at'=>now(),
+        ]);
+        foreach ($deltas as $column=>$delta) {
+            if (bccomp((string)$delta,'0',4) >= 0) {
+                DB::table('supplier_balance_summaries')->where('organization_id',$organizationId)->where('supplier_id',$supplierId)->increment($column,(float)$delta);
+            } else {
+                DB::table('supplier_balance_summaries')->where('organization_id',$organizationId)->where('supplier_id',$supplierId)->decrement($column,(float)bcsub('0',(string)$delta,4));
+            }
+        }
+        DB::table('supplier_balance_summaries')->where('organization_id',$organizationId)->where('supplier_id',$supplierId)->update([
+            $timestampColumn=>now(),'updated_at'=>now(),
+        ]);
     }
 
     private function claimIdempotency(string $organizationId, string $type, ?string $key, array $data): ?string
