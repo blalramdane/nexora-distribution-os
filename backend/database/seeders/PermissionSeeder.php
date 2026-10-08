@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 
 class PermissionSeeder extends Seeder
@@ -25,7 +26,12 @@ class PermissionSeeder extends Seeder
         foreach ($permissions as $permission) {
             DB::table('permissions')->updateOrInsert(
                 ['key' => $permission['key']],
-                ['name' => $permission['name'], 'updated_at' => now(), 'created_at' => now()]
+                [
+                    'id' => (string) Str::ulid(),
+                    'name' => $permission['name'],
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
             );
         }
     }
