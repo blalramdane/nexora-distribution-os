@@ -35,31 +35,10 @@ if (-not (Test-Path (Join-Path $PhpDir "php.ini"))) {
 }
 if (Test-Path (Join-Path $PhpDir "php.ini")) {
     $ini = Get-Content (Join-Path $PhpDir "php.ini") -Raw
-    $ini = $ini -replace '(?m)^;?extension_dir\s*=.*
-    foreach ($ext in @("curl","fileinfo","mbstring","openssl","pdo_mysql","bcmath","intl","zip")) { $ini = $ini -replace "(?m)^;extension=$ext\s*$", "extension=$ext" }
-    Set-Content (Join-Path $PhpDir "php.ini") $ini -Encoding UTF8
-    $env:PHPRC = Join-Path $PhpDir "php.ini"
-    $env:PHP_INI_SCAN_DIR = ""
-}
-if (-not (Get-Command composer -ErrorAction SilentlyContinue)) { throw "Composer is not installed." }
-$envFile = Join-Path $Backend ".env"
-if (-not (Test-Path $envFile)) { Copy-Item (Join-Path $Backend ".env.example") $envFile }
-$mysql = "C:\xampp\mysql\bin\mysql.exe"
-if (Test-Path $mysql) {
-    & $mysql -u root -e "CREATE DATABASE IF NOT EXISTS nexora_distribution CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-} else { Write-Host "XAMPP MySQL not found. Start MySQL and create nexora_distribution." -ForegroundColor Yellow }
-Push-Location $Backend
-try {
-    composer install
-    if ($LASTEXITCODE -ne 0) { throw "composer install failed with exit code $LASTEXITCODE." }
-    if (-not (Select-String -Path ".env" -Pattern "^APP_KEY=base64:" -Quiet)) { php artisan key:generate }
-    php artisan migrate --seed
-} finally { Pop-Location }
-Push-Location $Frontend
-try { npm install; if ($LASTEXITCODE -ne 0) { throw "npm install failed with exit code $LASTEXITCODE." } } finally { Pop-Location }
-Write-Host "NEXORA local setup completed." -ForegroundColor Green
-, 'extension_dir = "ext"'
-    foreach ($ext in @("curl","fileinfo","mbstring","openssl","pdo_mysql","bcmath","intl","zip")) { $ini = $ini -replace "(?m)^;extension=$ext\s*$", "extension=$ext" }
+    $ini = $ini -replace '(?m)^;?extension_dir\s*=.*$', 'extension_dir = "ext"'
+    foreach ($ext in @("curl","fileinfo","mbstring","openssl","pdo_mysql","bcmath","intl","zip")) {
+        $ini = $ini -replace "(?m)^;extension=$ext\s*$", "extension=$ext"
+    }
     Set-Content (Join-Path $PhpDir "php.ini") $ini -Encoding UTF8
     $env:PHPRC = Join-Path $PhpDir "php.ini"
     $env:PHP_INI_SCAN_DIR = ""
