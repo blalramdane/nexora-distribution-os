@@ -234,6 +234,92 @@ final class TransactionPostingService
         }, attempts:5);
     }
 
+    public function postTripLoad(string $organizationId, array $data): array
+    {
+        return DB::transaction(function () use ($organizationId, $data): array {
+            if ($replay = $this->claimIdempotency($organizationId,'trip_load.post',$data['idempotency_key'] ?? null,$data)) {
+                return $this->replayTripLoad($organizationId,$replay);
+            }
+
+            $trip=DB::table('trips')->where('organization_id',$organizationId)->where('id',$data['trip_id'])->lockForUpdate()->first();
+            if(!$trip) throw ValidationException::withMessages(['trip_id'=>['Trip was not found.']]);
+            if(in_array($trip->status,['completed','cancelled'],true)) throw ValidationException::withMessages(['trip_id'=>['Completed or cancelled trips cannot be loaded.']]);
+
+            $vehicle=DB::table('vehicles')->where('organization_id',$organizationId)->where('id',$trip->vehicle_id)->where('active',true)->first();
+            $source=DB::table('locations')->where('organization_id',$organizationId)->where('id',$data['from_location_id'])->where('status','active')->first();
+            if(!$vehicle || !$source) throw ValidationException::withMessages(['from_location_id'=>['Vehicle or source location is invalid.']]);
+
+            $loadId=(string)Str::ulid();
+            $loadNumber=$this->nextDocumentNumber($organizationId,'trip_load','LD');
+            DB::table('trip_loads')->insert([
+                'id'=>$loadId,'organization_id'=>$organizationId,'trip_id'=>$trip->id,
+                'from_location_id'=>$source->id,'to_vehicle_id'=>$vehicle->id,'status'=>'loaded',
+                'loaded_at'=>now(),'created_by'=>$data['created_by'] ?? null,
+                'idempotency_key'=>$data['idempotency_key'] ?? null,'created_at'=>now(),'updated_at'=>now(),
+            ]);
+
+            foreach($data['items'] as $line){
+                $product=DB::table('products')->where('organization_id',$organizationId)->where('id',$line['product_id'])->where('active',true)->firstOrFail();
+                $qty=(string)$line['quantity_base'];
+                if(bccomp($qty,'0',6)<=0) throw ValidationException::withMessages(['items'=>['Load quantity must be greater than zero.']]);
+
+                $sourceBalance=DB::table('stock_balances')->where('organization_id',$organizationId)->where('product_id',$product->id)->where('location_id',$source->id)->lockForUpdate()->first();
+                $available=(string)($sourceBalance->quantity_base ?? 0);
+                if(bccomp($available,$qty,6)<0) throw ValidationException::withMessages(['items'=>['Stock is insufficient for '.$product->name_ar.'.']]);
+
+                $vehicleBalance=DB::table('stock_balances')->where('organization_id',$organizationId)->where('product_id',$product->id)->where('location_id',$vehicle->location_id)->lockForUpdate()->first();
+                $cost=(string)($sourceBalance->average_cost ?? $product->default_cost ?? 0);
+                $tx=(string)Str::uuid();
+
+                $outMovementId=(string)Str::ulid();
+                DB::table('stock_movements')->insert([
+                    'id'=>$outMovementId,'organization_id'=>$organizationId,'transaction_uuid'=>$tx,'product_id'=>$product->id,
+                    'location_id'=>$source->id,'movement_type'=>'transfer_out','quantity_base'=>bcsub('0',$qty,6),
+                    'unit_cost'=>$cost,'source_document_type'=>'trip_load','source_document_id'=>$loadId,'occurred_at'=>now(),
+                    'posted_at'=>now(),'created_by'=>$data['created_by'] ?? null,'device_id'=>$data['device_id'] ?? null,
+                    'trip_id'=>$trip->id,'reference'=>$loadNumber,'created_at'=>now(),'updated_at'=>now(),
+                ]);
+
+                DB::table('trip_load_items')->insert([
+                    'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'trip_load_id'=>$loadId,
+                    'product_id'=>$product->id,'quantity_base'=>$qty,'source_stock_movement_id'=>$outMovementId,
+                    'created_at'=>now(),'updated_at'=>now(),
+                ]);
+
+                DB::table('stock_movements')->insert([
+                    'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'transaction_uuid'=>$tx,'product_id'=>$product->id,
+                    'location_id'=>$vehicle->location_id,'movement_type'=>'vehicle_load','quantity_base'=>$qty,
+                    'unit_cost'=>$cost,'source_document_type'=>'trip_load','source_document_id'=>$loadId,'occurred_at'=>now(),
+                    'posted_at'=>now(),'created_by'=>$data['created_by'] ?? null,'device_id'=>$data['device_id'] ?? null,
+                    'trip_id'=>$trip->id,'reference'=>$loadNumber,'created_at'=>now(),'updated_at'=>now(),
+                ]);
+
+                $newSourceQty=bcsub($available,$qty,6);
+                DB::table('stock_balances')->where('id',$sourceBalance->id)->update(['quantity_base'=>$newSourceQty,'updated_at'=>now()]);
+
+                $newVehicleQty=bcadd((string)($vehicleBalance->quantity_base ?? 0),$qty,6);
+                if($vehicleBalance){
+                    DB::table('stock_balances')->where('id',$vehicleBalance->id)->update(['quantity_base'=>$newVehicleQty,'average_cost'=>$cost,'updated_at'=>now()]);
+                }else{
+                    DB::table('stock_balances')->insert([
+                        'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'product_id'=>$product->id,
+                        'location_id'=>$vehicle->location_id,'quantity_base'=>$newVehicleQty,'reserved_quantity_base'=>0,
+                        'average_cost'=>$cost,'updated_at'=>now(),
+                    ]);
+                }
+            }
+
+            DB::table('trips')->where('id',$trip->id)->update([
+                'status'=>in_array($trip->status,['planned','ready'],true) ? 'loaded' : $trip->status,
+                'updated_at'=>now(),
+            ]);
+
+            $result=['id'=>$loadId,'load_number'=>$loadNumber,'trip_id'=>$trip->id,'vehicle_id'=>$vehicle->id,'status'=>'loaded'];
+            $this->completeIdempotency($organizationId,'trip_load.post',$data['idempotency_key'] ?? null,'trip_load:'.$loadId);
+            return $result;
+        }, attempts:5);
+    }
+
     public function postSalesReturn(string $organizationId, array $data): array
     {
         return DB::transaction(function () use ($organizationId, $data): array {
@@ -682,6 +768,20 @@ final class TransactionPostingService
         }
 
         return ['id'=>$invoice->id,'document_number'=>$invoice->document_number,'total'=>$invoice->total,'status'=>$invoice->status];
+    }
+
+    private function replayTripLoad(string $organizationId, string $reference): array
+    {
+        [$type,$id]=array_pad(explode(':',$reference,2),2,null);
+        if($type !== 'trip_load' || !$id) throw ValidationException::withMessages(['idempotency_key'=>['Stored trip load response is invalid.']]);
+        $load=DB::table('trip_loads')->where('organization_id',$organizationId)->where('id',$id)->first();
+        if(!$load) throw ValidationException::withMessages(['idempotency_key'=>['Stored trip load response could not be replayed.']]);
+        return ['id'=>$load->id,'load_number'=>$this->loadNumber($load),'trip_id'=>$load->trip_id,'vehicle_id'=>$load->to_vehicle_id,'status'=>$load->status];
+    }
+
+    private function loadNumber(object $load): string
+    {
+        return DB::table('document_sequences')->where('organization_id',$load->organization_id)->where('document_type','trip_load')->value('prefix') ? (string)$load->id : (string)$load->id;
     }
 
     private function replayReturn(string $organizationId, string $reference, string $type): array
