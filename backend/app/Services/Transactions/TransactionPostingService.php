@@ -220,8 +220,15 @@ final class TransactionPostingService
 
             $accounts=$this->ensureLedgerAccounts($organizationId);
             $tx=(string)Str::uuid();
-            $salesAccount=$paid==='0.0000' ? $accounts['accounts_receivable'] : $accounts['cash'];
-            $this->ledger($organizationId,$tx,$salesAccount,$total,0,'sales_invoice',$invoiceId);
+
+            // A partially-paid sale must split the receivable from the cash collected at posting.
+            // paid_amount is the cash collected at sale time; balance_due remains the AR portion.
+            if (bccomp($paid, '0.0000', 4) > 0) {
+                $this->ledger($organizationId,$tx,$accounts['cash'],$paid,0,'sales_invoice',$invoiceId);
+            }
+            if (bccomp($balanceDue, '0.0000', 4) > 0) {
+                $this->ledger($organizationId,$tx,$accounts['accounts_receivable'],$balanceDue,0,'sales_invoice',$invoiceId);
+            }
             $this->ledger($organizationId,$tx,$accounts['sales_revenue'],0,$total,'sales_invoice',$invoiceId);
             if(bccomp($cogs,'0.0000',4)>0){
                 $this->ledger($organizationId,$tx,$accounts['cogs'],$cogs,0,'sales_invoice',$invoiceId);
@@ -344,8 +351,28 @@ final class TransactionPostingService
             $productIds = $movementRows->pluck('product_id')->merge($actual->keys())->unique()->values();
             $settlementId = (string) Str::ulid();
 
-            $salesCash = (string) DB::table('sales_invoices')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->where('status','posted')->sum('paid_amount');
-            $collections = (string) DB::table('payments')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->where('direction','inbound')->where('status','posted')->sum('amount');
+            // Do not use the mutable invoice paid_amount here: it includes later collections
+            // allocated through postPayment(). Count only the cash actually posted with the sale.
+            $salesCashAccountId = $this->ensureLedgerAccounts($organizationId)['cash'];
+            $salesCash = (string) DB::table('ledger_entries')
+                ->where('organization_id',$organizationId)
+                ->where('account_id',$salesCashAccountId)
+                ->where('source_document_type','sales_invoice')
+                ->whereIn('source_document_id', function ($query) use ($organizationId, $trip): void {
+                    $query->from('sales_invoices')
+                        ->select('id')
+                        ->where('organization_id',$organizationId)
+                        ->where('trip_id',$trip->id)
+                        ->where('status','posted');
+                })
+                ->sum('debit');
+            $collections = (string) DB::table('payments')
+                ->where('organization_id',$organizationId)
+                ->where('trip_id',$trip->id)
+                ->where('party_type','customer')
+                ->where('direction','inbound')
+                ->where('status','posted')
+                ->sum('amount');
             $expenses = (string) DB::table('expenses')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->where('status','posted')->sum('amount');
             $openingCash = (string)($data['opening_cash'] ?? 0);
             $expectedCash = bcsub(bcadd(bcadd($openingCash,$salesCash,4),$collections,4),$expenses,4);
