@@ -1,70 +1,57 @@
-# Technical Implementation Architecture v1 — TODO
+# Technical Implementation Architecture v1 — Completion Record
 
-This is the next architecture gate before production feature implementation.
+TASK-001 delivered the implementation architecture contract. The detailed decisions now live in:
+- docs/architecture/TECHNICAL_IMPLEMENTATION_ARCHITECTURE_v1.md
+- docs/adr/0001-modular-monolith.md
+- docs/adr/0002-transaction-ledger.md
+- docs/adr/0003-offline-sync.md
+- docs/adr/0004-vehicle-as-location.md
+- docs/adr/0005-outbox-external-side-effects.md
 
-## Backend
-- [ ] Laravel/PHP version lock
-- [ ] Modular monolith boundaries
-- [ ] Domain/Application/Infrastructure conventions
-- [ ] Commands/services
-- [ ] Authorization
-- [ ] Validation
-- [ ] Idempotency
-- [ ] Outbox
-- [ ] Queue strategy
+## Completed
+- [x] Laravel/PHP version lock
+- [x] Modular monolith boundaries
+- [x] Domain/Application/Infrastructure conventions
+- [x] Commands/services
+- [x] Authorization
+- [x] Validation
+- [x] Idempotency
+- [x] Outbox
+- [x] Queue strategy
+- [x] Migration design rules
+- [x] UUID strategy
+- [x] Money/decimal types
+- [x] Indexing strategy
+- [x] Foreign-key policy
+- [x] Audit storage
+- [x] Projection rebuild strategy
+- [x] /api/v1 contract conventions
+- [x] Resources
+- [x] Pagination/search/filtering
+- [x] Error format
+- [x] Idempotency headers
+- [x] Sync endpoint architecture
+- [x] Auth/session/device contract
+- [x] Admin framework and state/query strategy
+- [x] Forms/tables/command palette
+- [x] RTL/i18n
+- [x] Field app shell
+- [x] IndexedDB schema
+- [x] Service worker strategy
+- [x] Local transaction model
+- [x] Operation queue
+- [x] Sync lifecycle
+- [x] Conflict UX model
+- [x] Device registration/security
+- [x] Docker/local environment direction
+- [x] Staging/production topology
+- [x] Backups/object storage
+- [x] Redis/queue
+- [x] Secrets
+- [x] CI/CD gates
+- [x] Monitoring/logging
+- [x] Unit/integration/invariant testing
+- [x] Offline sync/concurrency/E2E/load/security testing
 
-## Database
-- [ ] Migration order
-- [ ] UUID strategy
-- [ ] Money/decimal types
-- [ ] Indexes
-- [ ] Foreign-key policy
-- [ ] Audit storage
-- [ ] Projection rebuilds
-
-## API
-- [ ] /api/v1 contract
-- [ ] Resources
-- [ ] Pagination
-- [ ] Search/filtering
-- [ ] Error format
-- [ ] Idempotency headers
-- [ ] Sync endpoints
-- [ ] Auth/session contract
-
-## Admin Web
-- [ ] Framework lock
-- [ ] State/query strategy
-- [ ] Forms/tables
-- [ ] Command palette
-- [ ] RTL/i18n
-
-## Field PWA
-- [ ] App shell
-- [ ] IndexedDB schema
-- [ ] Service worker
-- [ ] Local transaction model
-- [ ] Queue
-- [ ] Sync protocol
-- [ ] Conflict UX
-- [ ] Device registration
-
-## Infrastructure
-- [ ] Docker local environment
-- [ ] Staging
-- [ ] Production
-- [ ] Backups
-- [ ] Object storage
-- [ ] Redis/queue
-- [ ] Secrets
-- [ ] CI/CD
-- [ ] Monitoring/logging
-
-## Testing
-- [ ] Unit
-- [ ] Feature/integration
-- [ ] Transaction invariants
-- [ ] Offline sync
-- [ ] Concurrency
-- [ ] E2E critical flows
-- [ ] Simulation/load tests
+## Next gate
+TASK-002 — Database Schema & Migration Specification.
