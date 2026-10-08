@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\PaymentController;
 use App\Http\Controllers\Api\V1\ReturnController;
 use App\Http\Controllers\Api\V1\TripLoadController;
 use App\Http\Controllers\Api\V1\TripController;
+use App\Http\Controllers\Api\V1\TripSettlementController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/v1/health', static fn () => response()->json([
@@ -46,5 +47,6 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/trips', [TripController::class, 'store']);
         Route::post('/trips/{trip}/customers', [TripController::class, 'assignCustomer']);
         Route::post('/trip-loads', [TripLoadController::class, 'store']);
+        Route::post('/trip-settlements', [TripSettlementController::class, 'store']);
     });
 });
