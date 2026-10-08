@@ -23,6 +23,8 @@ if ($useLocalPhp) {
         Remove-Item $PhpZip -Force
     }
     $env:PATH = "$PhpDir;$env:PATH"
+    $env:PHPRC = Join-Path $PhpDir "php.ini"
+    Remove-Item Env:PHP_INI_SCAN_DIR -ErrorAction SilentlyContinue
 }
 $phpVersion = (& php -r "echo PHP_VERSION;").Trim()
 if ([version]$phpVersion -lt [version]"8.3.0") { throw "NEXORA requires PHP 8.3+. Detected $phpVersion." }
@@ -34,6 +36,8 @@ if (Test-Path (Join-Path $PhpDir "php.ini")) {
     $ini = Get-Content (Join-Path $PhpDir "php.ini") -Raw
     foreach ($ext in @("curl","fileinfo","mbstring","openssl","pdo_mysql","bcmath","intl","zip")) { $ini = $ini -replace "(?m)^;extension=$ext\s*$", "extension=$ext" }
     Set-Content (Join-Path $PhpDir "php.ini") $ini -Encoding UTF8
+    $env:PHPRC = Join-Path $PhpDir "php.ini"
+    $env:PHP_INI_SCAN_DIR = ""
 }
 if (-not (Get-Command composer -ErrorAction SilentlyContinue)) { throw "Composer is not installed." }
 $envFile = Join-Path $Backend ".env"
@@ -45,9 +49,10 @@ if (Test-Path $mysql) {
 Push-Location $Backend
 try {
     composer install
+    if ($LASTEXITCODE -ne 0) { throw "composer install failed with exit code $LASTEXITCODE." }
     if (-not (Select-String -Path ".env" -Pattern "^APP_KEY=base64:" -Quiet)) { php artisan key:generate }
     php artisan migrate --seed
 } finally { Pop-Location }
 Push-Location $Frontend
-try { npm install } finally { Pop-Location }
+try { npm install; if ($LASTEXITCODE -ne 0) { throw "npm install failed with exit code $LASTEXITCODE." } } finally { Pop-Location }
 Write-Host "NEXORA local setup completed." -ForegroundColor Green
