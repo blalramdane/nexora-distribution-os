@@ -234,6 +234,193 @@ final class TransactionPostingService
         }, attempts:5);
     }
 
+    public function postSalesReturn(string $organizationId, array $data): array
+    {
+        return DB::transaction(function () use ($organizationId, $data): array {
+            if ($replay = $this->claimIdempotency($organizationId,'sales_return.post',$data['idempotency_key'] ?? null,$data)) {
+                return $this->replayReturn($organizationId,$replay,'sales_return');
+            }
+
+            $customer = DB::table('customers')->where('organization_id',$organizationId)->where('id',$data['customer_id'])->where('status','active')->firstOrFail();
+            $location = DB::table('locations')->where('organization_id',$organizationId)->where('id',$data['location_id'])->where('status','active')->firstOrFail();
+
+            $returnId=(string)Str::ulid();
+            $documentNumber=$this->nextDocumentNumber($organizationId,'sales_return','SR');
+            $subtotal='0.0000';
+            $items=[];
+
+            foreach($data['items'] as $line){
+                $product=DB::table('products')->where('organization_id',$organizationId)->where('id',$line['product_id'])->where('active',true)->firstOrFail();
+                $conversion=(string)($line['conversion_factor'] ?? 1);
+                $qty=(string)$line['quantity'];
+                $qtyBase=bcmul($qty,$conversion,6);
+                $unitPrice=(string)$line['unit_price'];
+                $lineTotal=bcmul($qty,$unitPrice,4);
+                $cost=(string)($product->default_cost ?? 0);
+
+                if (!empty($line['original_sales_invoice_item_id'])) {
+                    $original=DB::table('sales_invoice_items')->where('organization_id',$organizationId)->where('id',$line['original_sales_invoice_item_id'])->first();
+                    if(!$original || $original->product_id !== $product->id){
+                        throw ValidationException::withMessages(['items'=>['Original sales invoice item is invalid.']]);
+                    }
+                    $returned=DB::table('sales_return_items')->where('organization_id',$organizationId)->where('original_sales_invoice_item_id',$original->id)->sum('quantity_base');
+                    $remaining=bcsub((string)$original->quantity_base,(string)$returned,6);
+                    if(bccomp($qtyBase,$remaining,6)>0) throw ValidationException::withMessages(['items'=>['Return quantity exceeds the sold quantity.']]);
+                    $cost=(string)$original->unit_cost_snapshot;
+                }
+
+                $items[]=compact('product','conversion','qty','qtyBase','unitPrice','lineTotal','cost','line');
+                $subtotal=bcadd($subtotal,$lineTotal,4);
+            }
+
+            $total=bcadd(bcsub($subtotal,(string)($data['discount'] ?? 0),4),(string)($data['tax'] ?? 0),4);
+
+            DB::table('sales_returns')->insert([
+                'id'=>$returnId,'organization_id'=>$organizationId,'customer_id'=>$customer->id,
+                'source_location_id'=>$location->id,'original_sales_invoice_id'=>$data['original_sales_invoice_id'] ?? null,
+                'trip_id'=>$data['trip_id'] ?? null,'document_number'=>$documentNumber,'status'=>'posted',
+                'return_date'=>$data['return_date'] ?? now()->toDateString(),'posted_at'=>now(),
+                'subtotal'=>$subtotal,'discount'=>$data['discount'] ?? 0,'tax'=>$data['tax'] ?? 0,'total'=>$total,
+                'currency'=>$data['currency'] ?? 'EGP','created_by'=>$data['created_by'] ?? null,
+                'device_id'=>$data['device_id'] ?? null,'idempotency_key'=>$data['idempotency_key'] ?? null,
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+
+            foreach($items as $item){
+                DB::table('sales_return_items')->insert([
+                    'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'sales_return_id'=>$returnId,
+                    'product_id'=>$item['product']->id,'original_sales_invoice_item_id'=>$item['line']['original_sales_invoice_item_id'] ?? null,
+                    'packaging_id'=>$item['line']['packaging_id'] ?? null,'entered_quantity'=>$item['qty'],
+                    'conversion_factor_snapshot'=>$item['conversion'],'quantity_base'=>$item['qtyBase'],
+                    'unit_price_base'=>bcdiv($item['unitPrice'],$item['conversion'],4),'unit_cost_snapshot'=>$item['cost'],
+                    'line_total'=>$item['lineTotal'],'created_at'=>now(),'updated_at'=>now(),
+                ]);
+
+                $balance=DB::table('stock_balances')->where('organization_id',$organizationId)->where('product_id',$item['product']->id)->where('location_id',$location->id)->lockForUpdate()->first();
+                if($balance){
+                    DB::table('stock_balances')->where('id',$balance->id)->update(['quantity_base'=>bcadd((string)$balance->quantity_base,$item['qtyBase'],6),'updated_at'=>now()]);
+                }else{
+                    DB::table('stock_balances')->insert([
+                        'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'product_id'=>$item['product']->id,
+                        'location_id'=>$location->id,'quantity_base'=>$item['qtyBase'],'reserved_quantity_base'=>0,'average_cost'=>$item['cost'],'updated_at'=>now(),
+                    ]);
+                }
+                DB::table('stock_movements')->insert([
+                    'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'transaction_uuid'=>(string)Str::uuid(),
+                    'product_id'=>$item['product']->id,'location_id'=>$location->id,'movement_type'=>'sales_return',
+                    'quantity_base'=>$item['qtyBase'],'unit_cost'=>$item['cost'],'source_document_type'=>'sales_return',
+                    'source_document_id'=>$returnId,'occurred_at'=>now(),'posted_at'=>now(),'created_by'=>$data['created_by'] ?? null,
+                    'device_id'=>$data['device_id'] ?? null,'trip_id'=>$data['trip_id'] ?? null,'reference'=>$documentNumber,
+                    'created_at'=>now(),'updated_at'=>now(),
+                ]);
+            }
+
+            $accounts=$this->ensureLedgerAccounts($organizationId);
+            $tx=(string)Str::uuid();
+            $this->ledger($organizationId,$tx,$accounts['sales_returns'],$total,0,'sales_return',$returnId);
+            $this->ledger($organizationId,$tx,$accounts['accounts_receivable'],0,$total,'sales_return',$returnId);
+            $this->ledger($organizationId,$tx,$accounts['inventory'],$this->returnCost($items),0,'sales_return',$returnId);
+            $this->ledger($organizationId,$tx,$accounts['cogs'],0,$this->returnCost($items),'sales_return',$returnId);
+
+            DB::statement("INSERT INTO customer_balance_summaries (id,organization_id,customer_id,total_returns,outstanding,last_sale_at,updated_at) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_returns=total_returns+VALUES(total_returns), outstanding=outstanding-VALUES(total_returns), updated_at=VALUES(updated_at)", [
+                (string)Str::ulid(),$organizationId,$customer->id,$total,bcsub('0',$total,4),now(),now()
+            ]);
+
+            $result=['id'=>$returnId,'document_number'=>$documentNumber,'total'=>$total,'status'=>'posted'];
+            $this->completeIdempotency($organizationId,'sales_return.post',$data['idempotency_key'] ?? null,'sales_return:'.$returnId);
+            return $result;
+        }, attempts:5);
+    }
+
+    public function postPurchaseReturn(string $organizationId, array $data): array
+    {
+        return DB::transaction(function () use ($organizationId, $data): array {
+            if ($replay = $this->claimIdempotency($organizationId,'purchase_return.post',$data['idempotency_key'] ?? null,$data)) {
+                return $this->replayReturn($organizationId,$replay,'purchase_return');
+            }
+
+            $supplier=DB::table('suppliers')->where('organization_id',$organizationId)->where('id',$data['supplier_id'])->where('active',true)->firstOrFail();
+            $location=DB::table('locations')->where('organization_id',$organizationId)->where('id',$data['location_id'])->where('status','active')->firstOrFail();
+
+            $returnId=(string)Str::ulid();
+            $documentNumber=$this->nextDocumentNumber($organizationId,'purchase_return','PR');
+            $subtotal='0.0000';
+            $items=[];
+
+            foreach($data['items'] as $line){
+                $product=DB::table('products')->where('organization_id',$organizationId)->where('id',$line['product_id'])->where('active',true)->firstOrFail();
+                $conversion=(string)($line['conversion_factor'] ?? 1);
+                $qty=(string)$line['quantity'];
+                $qtyBase=bcmul($qty,$conversion,6);
+                $unitCost=(string)$line['unit_cost'];
+                $lineTotal=bcmul($qty,$unitCost,4);
+
+                $balance=DB::table('stock_balances')->where('organization_id',$organizationId)->where('product_id',$product->id)->where('location_id',$location->id)->lockForUpdate()->first();
+                $available=(string)($balance->quantity_base ?? 0);
+                if(bccomp($available,$qtyBase,6)<0) throw ValidationException::withMessages(['items'=>['Stock is insufficient for this purchase return.']]);
+
+                $items[]=compact('product','conversion','qty','qtyBase','unitCost','lineTotal','balance','line');
+                $subtotal=bcadd($subtotal,$lineTotal,4);
+            }
+
+            $total=bcadd(bcsub($subtotal,(string)($data['discount'] ?? 0),4),(string)($data['tax'] ?? 0),4);
+
+            DB::table('purchase_returns')->insert([
+                'id'=>$returnId,'organization_id'=>$organizationId,'supplier_id'=>$supplier->id,'location_id'=>$location->id,
+                'original_purchase_invoice_id'=>$data['original_purchase_invoice_id'] ?? null,'document_number'=>$documentNumber,
+                'status'=>'posted','return_date'=>$data['return_date'] ?? now()->toDateString(),'posted_at'=>now(),
+                'subtotal'=>$subtotal,'discount'=>$data['discount'] ?? 0,'tax'=>$data['tax'] ?? 0,'total'=>$total,
+                'currency'=>$data['currency'] ?? 'EGP','created_by'=>$data['created_by'] ?? null,'device_id'=>$data['device_id'] ?? null,
+                'idempotency_key'=>$data['idempotency_key'] ?? null,'created_at'=>now(),'updated_at'=>now(),
+            ]);
+
+            foreach($items as $item){
+                DB::table('purchase_return_items')->insert([
+                    'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'purchase_return_id'=>$returnId,
+                    'product_id'=>$item['product']->id,'original_purchase_invoice_item_id'=>$item['line']['original_purchase_invoice_item_id'] ?? null,
+                    'packaging_id'=>$item['line']['packaging_id'] ?? null,'entered_quantity'=>$item['qty'],
+                    'conversion_factor_snapshot'=>$item['conversion'],'quantity_base'=>$item['qtyBase'],
+                    'unit_cost_base'=>$item['unitCost'],'line_total'=>$item['lineTotal'],'created_at'=>now(),'updated_at'=>now(),
+                ]);
+
+                DB::table('stock_balances')->where('id',$item['balance']->id)->update([
+                    'quantity_base'=>bcsub((string)$item['balance']->quantity_base,$item['qtyBase'],6),'updated_at'=>now()
+                ]);
+                DB::table('stock_movements')->insert([
+                    'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'transaction_uuid'=>(string)Str::uuid(),
+                    'product_id'=>$item['product']->id,'location_id'=>$location->id,'movement_type'=>'purchase_return',
+                    'quantity_base'=>bcsub('0',$item['qtyBase'],6),'unit_cost'=>$item['unitCost'],
+                    'source_document_type'=>'purchase_return','source_document_id'=>$returnId,'occurred_at'=>now(),
+                    'posted_at'=>now(),'created_by'=>$data['created_by'] ?? null,'device_id'=>$data['device_id'] ?? null,
+                    'reference'=>$documentNumber,'created_at'=>now(),'updated_at'=>now(),
+                ]);
+            }
+
+            $accounts=$this->ensureLedgerAccounts($organizationId);
+            $tx=(string)Str::uuid();
+            $this->ledger($organizationId,$tx,$accounts['accounts_payable'],$total,0,'purchase_return',$returnId);
+            $this->ledger($organizationId,$tx,$accounts['inventory'],0,$this->returnCost($items,true),'purchase_return',$returnId);
+
+            DB::statement("INSERT INTO supplier_balance_summaries (id,organization_id,supplier_id,total_returns,outstanding,updated_at) VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_returns=total_returns+VALUES(total_returns), outstanding=outstanding-VALUES(total_returns), updated_at=VALUES(updated_at)", [
+                (string)Str::ulid(),$organizationId,$supplier->id,$total,bcsub('0',$total,4),now()
+            ]);
+
+            $result=['id'=>$returnId,'document_number'=>$documentNumber,'total'=>$total,'status'=>'posted'];
+            $this->completeIdempotency($organizationId,'purchase_return.post',$data['idempotency_key'] ?? null,'purchase_return:'.$returnId);
+            return $result;
+        }, attempts:5);
+    }
+
+    private function returnCost(array $items, bool $purchase=false): string
+    {
+        $total='0.0000';
+        foreach($items as $item){
+            $cost=$purchase ? $item['unitCost'] : $item['cost'];
+            $total=bcadd($total,bcmul($cost,$item['qtyBase'],4),4);
+        }
+        return $total;
+    }
+
     public function postPayment(string $organizationId, array $data): array
     {
         return DB::transaction(function () use ($organizationId, $data): array {
@@ -495,6 +682,16 @@ final class TransactionPostingService
         return ['id'=>$invoice->id,'document_number'=>$invoice->document_number,'total'=>$invoice->total,'status'=>$invoice->status];
     }
 
+    private function replayReturn(string $organizationId, string $reference, string $type): array
+    {
+        [$storedType,$id]=array_pad(explode(':',$reference,2),2,null);
+        if($storedType !== $type || !$id) throw ValidationException::withMessages(['idempotency_key'=>['Stored return response is invalid.']]);
+        $table=$type === 'sales_return' ? 'sales_returns' : 'purchase_returns';
+        $row=DB::table($table)->where('organization_id',$organizationId)->where('id',$id)->first();
+        if(!$row) throw ValidationException::withMessages(['idempotency_key'=>['Stored return response could not be replayed.']]);
+        return ['id'=>$row->id,'document_number'=>$row->document_number,'total'=>$row->total,'status'=>$row->status];
+    }
+
     private function replayPayment(string $organizationId, string $reference): array
     {
         [$type,$id] = array_pad(explode(':',$reference,2),2,null);
@@ -558,6 +755,7 @@ final class TransactionPostingService
             'cash'=>['1000','Cash','asset'],
             'sales_revenue'=>['4000','Sales Revenue','revenue'],
             'cogs'=>['5000','Cost of Goods Sold','expense'],
+            'sales_returns'=>['4100','Sales Returns','revenue'],
         ];
         $ids=[];
         foreach($map as $key=>[$code,$name,$type]){
