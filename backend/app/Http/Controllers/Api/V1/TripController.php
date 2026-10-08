@@ -28,7 +28,8 @@ class TripController extends Controller{
   $row=DB::table('trips')->where('organization_id',$org)->where('id',$trip)->first();
   abort_unless($row,404);
   $location=DB::table('vehicles')->where('organization_id',$org)->where('id',$row->vehicle_id)->value('location_id');
-  return response()->json(DB::table('stock_balances as s')->join('products as p','p.id','=','s.product_id')->where('s.organization_id',$org)->where('s.location_id',$location)->where('s.quantity_base','>',0)->select('p.id as product_id','p.sku','p.name_ar','s.quantity_base','s.average_cost')->orderBy('p.name_ar')->get());
+  $productIds=DB::table('stock_movements')->where('organization_id',$org)->where('trip_id',$trip)->distinct()->pluck('product_id');
+  return response()->json(DB::table('stock_balances as s')->join('products as p','p.id','=','s.product_id')->where('s.organization_id',$org)->where('s.location_id',$location)->whereIn('s.product_id',$productIds)->select('p.id as product_id','p.sku','p.name_ar','s.quantity_base','s.average_cost')->orderBy('p.name_ar')->get());
  }
  public function assignCustomer(Request $request,string $trip){
   $data=$request->validate(['customer_id'=>['required','string','size:26'],'sequence'=>['nullable','integer','min:1']]);$org=$request->user()->organization_id;
