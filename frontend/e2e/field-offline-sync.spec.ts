@@ -96,7 +96,7 @@ test("field visit queues offline and is acknowledged after reconnect", async ({ 
 
   const syncRequest = page.waitForRequest("**/api/v1/sync/operations", { timeout: 10_000 });
   await context.setOffline(false);
-  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await page.evaluate(() => { Object.defineProperty(navigator, "onLine", { configurable: true, value: true }); window.dispatchEvent(new Event("online")); });
   await expect(page.locator(".connection")).toContainText("متصل");
   const request = await syncRequest;
   console.log("SYNC_REQUEST", request.postData());
