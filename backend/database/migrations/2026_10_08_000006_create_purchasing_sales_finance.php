@@ -213,7 +213,7 @@ return new class extends Migration
             $table->foreignUlid('device_id')->nullable()->constrained('devices')->nullOnDelete();
             $table->string('idempotency_key', 255)->nullable();
             $table->timestamps();
-            $table->index(['organization_id', 'party_type', 'party_id', 'payment_date']);
+            $table->index(['organization_id', 'party_type', 'party_id', 'payment_date'], 'payments_party_date_idx');
 
         });
 
@@ -225,7 +225,7 @@ return new class extends Migration
             $table->ulid('document_id');
             $table->decimal('amount', 19, 4);
             $table->timestamps();
-            $table->index(['organization_id', 'document_type', 'document_id']);
+            $table->index(['organization_id', 'document_type', 'document_id'], 'payment_alloc_doc_idx');
 
         });
 
