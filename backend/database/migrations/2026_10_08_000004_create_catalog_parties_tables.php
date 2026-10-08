@@ -44,7 +44,7 @@ return new class extends Migration
             $table->date('effective_from')->nullable();
             $table->date('effective_to')->nullable();
             $table->timestamps();
-            $table->unique(['organization_id', 'product_id', 'unit_id', 'name_ar']);
+            $table->unique(['organization_id', 'product_id', 'unit_id', 'name_ar'], 'pp_org_product_unit_name_uq');
             $table->index(['organization_id', 'product_id', 'active']);
 
         });
@@ -102,7 +102,7 @@ return new class extends Migration
             $table->timestamp('last_purchase_at')->nullable();
             $table->boolean('active')->default(true)->index();
             $table->timestamps();
-            $table->unique(['organization_id', 'supplier_id', 'product_id']);
+            $table->unique(['organization_id', 'supplier_id', 'product_id'], 'sp_org_supplier_product_uq');
         });
 
         Schema::create('customers', function (Blueprint $table): void {
