@@ -18,13 +18,14 @@ use App\Http\Controllers\Api\V1\TripSettlementController;
 use App\Http\Controllers\Api\V1\FieldController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/v1/health', static fn () => response()->json([
-    'status' => 'ok',
-    'service' => 'nexora-distribution-api',
-]));
+Route::get('/v1/health', static fn () => response()->json(['status'=>'ok','service'=>'nexora-distribution-api']));
 
 Route::prefix('v1')->group(function (): void {
     Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+
+    if (app()->environment(['local','testing'])) {
+        Route::post('/auth/demo', [AuthController::class, 'demoLogin'])->middleware('throttle:5,1');
+    }
 
     Route::middleware(['auth:sanctum','tenant'])->group(function (): void {
         Route::get('/auth/me', [AuthController::class, 'me']);
