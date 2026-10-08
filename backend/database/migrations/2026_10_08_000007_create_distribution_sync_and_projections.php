@@ -67,7 +67,6 @@ return new class extends Migration
             $table->decimal('quantity_base', 19, 6);
             $table->foreignUlid('source_stock_movement_id')->nullable()->constrained('stock_movements')->nullOnDelete();
             $table->timestamps();
-            
         });
 
         Schema::create('customer_visits', function (Blueprint $table): void {
@@ -151,7 +150,7 @@ return new class extends Migration
             $table->timestamp('processed_at')->nullable();
             $table->timestamps();
             $table->unique(['organization_id', 'operation_uuid']);
-            $table->unique(['organization_id', 'operation_type', 'idempotency_key']);
+            $table->unique(['organization_id', 'operation_type', 'idempotency_key'], 'sync_ops_org_type_key_uq');
             $table->index(['organization_id', 'device_id', 'status'], 'sync_device_status_idx');
         });
 
@@ -244,13 +243,37 @@ return new class extends Migration
             $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
             $table->unique(['organization_id', 'business_date']);
         });
+
         DB::statement("ALTER TABLE trip_load_items ADD CONSTRAINT chk_trip_load_item_qty CHECK (quantity_base > 0)");
     }
 
     public function down(): void
     {
-        foreach (['dashboard_daily_summaries','supplier_balance_summaries','customer_balance_summaries','outbox_attempts','message_outbox','sync_conflicts','sync_operations','trip_settlement_lines','trip_settlements','trip_expenses','customer_visits','trip_load_items','trip_loads','trip_customers','expenses','payments','sales_returns','sales_invoices','purchase_returns','purchase_invoices','trips'] as $table) {
+        foreach ([
+            'dashboard_daily_summaries',
+            'supplier_balance_summaries',
+            'customer_balance_summaries',
+            'outbox_attempts',
+            'message_outbox',
+            'sync_conflicts',
+            'sync_operations',
+            'trip_settlement_lines',
+            'trip_settlements',
+            'trip_expenses',
+            'customer_visits',
+            'trip_load_items',
+            'trip_loads',
+            'trip_customers',
+        ] as $table) {
             Schema::dropIfExists($table);
         }
+
+        DB::statement('ALTER TABLE expenses DROP FOREIGN KEY expenses_trip_id_fk');
+        DB::statement('ALTER TABLE expenses DROP FOREIGN KEY expenses_vehicle_id_fk');
+        DB::statement('ALTER TABLE payments DROP FOREIGN KEY payments_trip_id_fk');
+        DB::statement('ALTER TABLE sales_returns DROP FOREIGN KEY sales_returns_trip_id_fk');
+        DB::statement('ALTER TABLE sales_invoices DROP FOREIGN KEY sales_invoices_trip_id_fk');
+        DB::statement('ALTER TABLE stock_movements DROP FOREIGN KEY stock_movements_trip_id_fk');
+        Schema::dropIfExists('trips');
     }
 };
