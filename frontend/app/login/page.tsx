@@ -23,11 +23,22 @@ export default function LoginPage() {
     finally{setLoading(false);}
   }
 
+  async function demo(){
+    setLoading(true); setError("");
+    try{
+      const result=await api<{token:string}>("/auth/demo",{method:"POST",body:JSON.stringify({device_name:"NEXORA Local Demo"})});
+      localStorage.setItem("nexora_token",result.token);
+      window.location.href="/";
+    }catch(err){setError(err instanceof Error?err.message:"تعذر تشغيل الـDemo. تأكد من seed.");}
+    finally{setLoading(false);}
+  }
+
   return <main className="login">
     <form className="login-card" onSubmit={submit}>
       <div className="brand" style={{color:"var(--navy)"}}>NEXORA <span>Distribution</span></div>
       <h1 style={{marginBottom:6}}>تسجيل الدخول</h1>
       <p className="subtitle">إدارة المخزن، العربيات، المبيعات والرحلات من مكان واحد.</p>
+      <button type="button" className="secondary" onClick={demo} disabled={loading} style={{width:"100%",marginBottom:14}}>دخول Demo المحلي — للتست</button>
       <div className="field"><label>Organization ID</label><input value={organizationId} onChange={e=>setOrganizationId(e.target.value)} required placeholder="ULID" /></div>
       <div className="field"><label>الإيميل أو الهاتف</label><input value={login} onChange={e=>setLogin(e.target.value)} required /></div>
       <div className="field"><label>كلمة المرور</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} required /></div>

@@ -14,5 +14,11 @@ class DatabaseSeeder extends Seeder
             ReferenceDataSeeder::class,
             DocumentSequenceSeeder::class,
         ]);
+
+        if (app()->environment(['local', 'testing'])) {
+            $this->call([
+                DemoOrganizationSeeder::class,
+            ]);
+        }
     }
 }

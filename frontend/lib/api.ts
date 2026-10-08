@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem("nexora_token") : null;
@@ -9,7 +9,12 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
   const response = await fetch(`${API_URL}${path}`, { ...options, headers });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload?.message || "حدث خطأ أثناء الاتصال بالنظام.");
+  if (!response.ok) {
+    const validation = payload?.errors && typeof payload.errors === "object"
+      ? Object.values(payload.errors).flat().join(" | ")
+      : "";
+    throw new Error(validation || payload?.message || `فشل الطلب (${response.status})`);
+  }
   return payload as T;
 }
 
