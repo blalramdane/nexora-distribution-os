@@ -29,3 +29,18 @@ Modular Monolith + Transaction Engine + Ledger Projections + Offline Sync.
 
 ## Expansion
 The same NEXORA core can later support other distribution verticals such as FMCG, food, cosmetics, medical supplies and spare parts.
+
+
+## Product Packaging Reality
+
+The business sells electrical/home-appliance products in cartons/packages as well as individual pieces. Many customers purchase partial quantities rather than full cartons.
+
+This is a first-class product requirement, not a reporting-only feature:
+- one carton can contain N pieces
+- customers can buy cartons, pieces, or mixed quantities
+- warehouse and vehicle stock must reconcile at piece/base-unit level
+- carton and piece barcodes may both identify the same product
+- historical transactions preserve the unit and conversion used at posting
+- the UI must make carton/piece entry extremely fast for field sales and warehouse operations
+
+Example: if a product is 50 pieces/carton, selling 3 cartons + 4 pieces reduces stock by 154 pieces.
