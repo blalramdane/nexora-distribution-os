@@ -17,7 +17,7 @@ async function syncOperationStatus(page: import("@playwright/test").Page) {
 }
 
 test("field visit queues offline and is acknowledged after reconnect", async ({ page, context }) => {
-  await page.route("**/field/today", async (route) => {
+  await page.route("**/*field/today*", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -44,7 +44,10 @@ test("field visit queues offline and is acknowledged after reconnect", async ({ 
     });
   });
 
+  const apiResponse = page.waitForResponse((response) => response.url().includes("field/today"));
   await page.goto("/field");
+  const fieldResponse = await apiResponse;
+  expect(fieldResponse.status()).toBe(200);
   await expect(page.getByText("عميل اختبار")).toBeVisible();
 
   await context.setOffline(true);
