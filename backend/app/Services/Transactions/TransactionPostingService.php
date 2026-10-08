@@ -320,6 +320,68 @@ final class TransactionPostingService
         }, attempts:5);
     }
 
+    public function settleTrip(string $organizationId, array $data): array
+    {
+        return DB::transaction(function () use ($organizationId, $data): array {
+            $trip = DB::table('trips')->where('organization_id',$organizationId)->where('id',$data['trip_id'])->lockForUpdate()->first();
+            if (!$trip) throw ValidationException::withMessages(['trip_id'=>['Trip was not found.']]);
+            if (in_array($trip->status, ['completed','cancelled'], true)) {
+                throw ValidationException::withMessages(['trip_id'=>['This trip is already closed.']]);
+            }
+
+            $movementRows = DB::table('stock_movements')
+                ->where('organization_id',$organizationId)->where('trip_id',$trip->id)
+                ->select('product_id', DB::raw("SUM(quantity_base) as expected_closing"))
+                ->groupBy('product_id')->get();
+
+            $actual = collect($data['closing_items'] ?? [])->keyBy('product_id');
+            $productIds = $movementRows->pluck('product_id')->merge($actual->keys())->unique()->values();
+            $settlementId = (string) Str::ulid();
+
+            $salesCash = (string) DB::table('sales_invoices')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->where('status','posted')->sum('paid_amount');
+            $collections = (string) DB::table('payments')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->where('direction','inbound')->where('status','posted')->sum('amount');
+            $expenses = (string) DB::table('expenses')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->where('status','posted')->sum('amount');
+            $openingCash = (string)($data['opening_cash'] ?? 0);
+            $expectedCash = bcsub(bcadd(bcadd($openingCash,$salesCash,4),$collections,4),$expenses,4);
+            $actualCash = (string)($data['actual_cash'] ?? 0);
+            $cashVariance = bcsub($actualCash,$expectedCash,4);
+
+            DB::table('trip_settlements')->insert([
+                'id'=>$settlementId,'organization_id'=>$organizationId,'trip_id'=>$trip->id,'status'=>'settled',
+                'opening_cash'=>$openingCash,'expected_cash'=>$expectedCash,'actual_cash'=>$actualCash,
+                'cash_variance'=>$cashVariance,'settled_by'=>$data['settled_by'] ?? null,'settled_at'=>now(),
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+
+            $stockVarianceValue='0.0000';
+            foreach($productIds as $productId){
+                $row=$movementRows->firstWhere('product_id',$productId);
+                $expected=(string)($row->expected_closing ?? 0);
+                $actualQty=(string)($actual->get($productId)['quantity_base'] ?? 0);
+                $variance=bcsub($actualQty,$expected,6);
+                $balance=DB::table('stock_balances')->where('organization_id',$organizationId)->where('product_id',$productId)->where('location_id',DB::table('vehicles')->where('id',$trip->vehicle_id)->value('location_id'))->first();
+                $cost=(string)($balance->average_cost ?? 0);
+                $stockVarianceValue=bcadd($stockVarianceValue,bcmul($variance,$cost,4),4);
+                DB::table('trip_settlement_lines')->insert([
+                    'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'trip_settlement_id'=>$settlementId,'product_id'=>$productId,
+                    'opening_quantity_base'=>0,'loaded_quantity_base'=>max(0,(float)($row->expected_closing ?? 0)),
+                    'sold_quantity_base'=>0,'returned_quantity_base'=>0,'transferred_quantity_base'=>0,'adjustment_quantity_base'=>0,
+                    'expected_closing_quantity_base'=>$expected,'actual_closing_quantity_base'=>$actualQty,'variance_quantity_base'=>$variance,
+                    'created_at'=>now(),'updated_at'=>now(),
+                ]);
+            }
+
+            DB::table('trip_settlements')->where('id',$settlementId)->update(['stock_variance_value'=>$stockVarianceValue,'updated_at'=>now()]);
+            DB::table('trips')->where('id',$trip->id)->update(['status'=>'completed','ended_at'=>now(),'updated_at'=>now()]);
+
+            return [
+                'id'=>$settlementId,'trip_id'=>$trip->id,'status'=>'settled',
+                'expected_cash'=>$expectedCash,'actual_cash'=>$actualCash,'cash_variance'=>$cashVariance,
+                'stock_variance_value'=>$stockVarianceValue,
+            ];
+        }, attempts:5);
+    }
+
     public function postSalesReturn(string $organizationId, array $data): array
     {
         return DB::transaction(function () use ($organizationId, $data): array {
