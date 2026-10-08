@@ -1,14 +1,17 @@
 import Dexie, { type EntityTable } from "dexie";
 
+export type SyncStatus = "pending" | "syncing" | "failed" | "completed" | "rejected" | "conflict";
+
 export type SyncOperation = {
   id: string;
   operationUuid: string;
   operationType: string;
   idempotencyKey: string;
   payload: unknown;
-  status: "pending" | "syncing" | "failed" | "completed";
+  status: SyncStatus;
   createdAt: number;
   lastError?: string;
+  resultReference?: string | null;
 };
 
 export const db = new Dexie("nexora-distribution") as Dexie & {
