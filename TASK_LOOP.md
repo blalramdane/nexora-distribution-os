@@ -534,3 +534,7 @@ NEXORA AI should review:
 - scope discipline
 
 If the task is incomplete, the next instruction is a correction task, not the next roadmap task.
+
+
+### Design baseline lock
+Before implementing any Admin Web or Field PWA UI, the agent must read `docs/design/UI_UX_VISUAL_BASELINE_v1.md`. This visual baseline is approved and locked; new screens must extend it rather than invent a new visual system.
