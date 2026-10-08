@@ -1077,29 +1077,44 @@ A new visual system requires explicit NEXORA AI approval.
 
 # 21. CURRENT EXECUTION STATE
 
+## Batch 1 review
+**APPROVED**
+
+Evidence:
+- CI run: 37723730138
+- Result: SUCCESS
+- Commit: d2d9aa34eaab706c24a964491d48228dabed9775
+- Composer install: PASS
+- Laravel bootstrap: PASS
+- Empty DB migrations: PASS
+- Schema foundation tests: PASS
+
+Corrections verified during Batch 1:
+- composer.json JSON escaping
+- Laravel bootstrap namespaces
+- bootstrap/cache directory
+- permission ULID seeding
+- schema test ULID namespace/reference
+
 ## Current Batch
-**BATCH 1 — Backend Foundation**
+**BATCH 2 — Database Core**
 
 ## Current Task
-**TASK-003 — Laravel Backend Foundation + Database Migrations + Schema Tests**
+**TASK-004 — Complete database schema, constraints, indexes and repeatable reference-data seeders**
 
 ## Status
-**IMPLEMENTATION COMPLETE / CI VERIFICATION PENDING**
+**ACTIVE / IMPLEMENTATION IN PROGRESS**
 
-Current implementation contains:
-- Laravel 13 / PHP 8.3+ foundation.
-- Organization model.
-- Tenant middleware foundation.
-- Identity migrations.
-- Roles/permissions/devices foundation.
-- API health route.
-- Seed foundation.
-- PHPUnit foundation.
-- GitHub Actions MySQL 8.4 CI.
-
-Do not mark Batch 1 approved until CI evidence exists.
-
----
+## Batch 2 gate
+Do not activate Batch 3 until:
+- all schema waves are implemented,
+- migration chain succeeds on empty MySQL 8.4,
+- seeders are repeatable,
+- schema integrity tests pass,
+- indexes/FKs/tenant boundaries are reviewed,
+- packaging constraints are tested,
+- idempotency/payment/return/sync/outbox constraints are tested,
+- NEXORA AI review approves Batch 2.
 
 # 22. PROJECT STATUS RULE
 
