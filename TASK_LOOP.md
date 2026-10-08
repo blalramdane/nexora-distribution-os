@@ -384,59 +384,50 @@ Do not start full production feature implementation during TASK-001.
 
 ## Status
 
-**COMPLETE — PENDING NEXORA AI REVIEW**
+**TASK-002 COMPLETE — PENDING NEXORA AI REVIEW**
 
 ## Agent report
 
 ### Status
-TASK-001 implementation complete.
+TASK-002 Database Schema & Migration Specification completed.
 
 ### Changed
-Created the production implementation architecture contract and all five required ADRs. Locked the primary technology choices and implementation boundaries without starting production feature coding.
+Created the database implementation contract covering tenant isolation, identity, geography, catalog, carton/piece packaging, parties, locations, inventory ledger, purchasing, sales, finance, ledger, distribution, offline sync, outbox, audit, projections, indexes, referential integrity, seed data and migration safety.
 
 ### Files changed
-- docs/architecture/TECHNICAL_IMPLEMENTATION_ARCHITECTURE_v1.md
-- docs/adr/0001-modular-monolith.md
-- docs/adr/0002-transaction-ledger.md
-- docs/adr/0003-offline-sync.md
-- docs/adr/0004-vehicle-as-location.md
-- docs/adr/0005-outbox-external-side-effects.md
-- docs/architecture/IMPLEMENTATION_ARCHITECTURE_TODO.md
+- docs/architecture/DATABASE_SCHEMA_SPEC_v1.md
 - PROJECT_STATUS.md
 - TASK_LOOP.md
 
 ### Tests
-Documentation verification performed by re-fetching all six TASK-001 deliverables from the default branch and checking that the files exist and are readable. No application test suite was run because no production application exists yet.
+Documentation/schema consistency verification performed by re-fetching the source architecture documents and the new database specification from GitHub. No application tests were run because the Laravel application has not yet been created.
 
 ### Build
-Not applicable to TASK-001; this was a documentation-only architecture gate.
+Not applicable to TASK-002; this task is a schema/documentation gate.
 
 ### Verification
 Verified:
-- Architecture file exists.
-- All five ADRs exist.
-- Backend, database, API, Admin Web, Field PWA, infrastructure, testing, security and observability are covered.
-- Core decisions match the existing blueprint/domain/transaction/UX contracts.
-- No TASK-001 decision is left as an unresolved implementation TODO.
-- TASK-002 is explicitly defined as the next gate.
+- Migration order follows domain dependencies.
+- Product packaging supports carton, piece and mixed quantities.
+- Transaction lines preserve conversion snapshots.
+- Stock movements use base units.
+- Vehicle inventory remains location-based.
+- Idempotency and sync uniqueness are explicit.
+- Payment allocation and return limits are explicit.
+- Projection/source-of-truth boundaries are explicit.
+- Tenant isolation and FK rules are explicit.
+- Schema is aligned with the transaction engine and UX contracts.
+- UI visual baseline remains independent from database behavior.
 
 ### Remaining issues
-TASK-002 must define the exact database schema, migration order, constraints, indexes, ledger tables, sync tables and seed/reference strategy. Business policy decisions that affect schema (tax/VAT, numbering, costing, negative stock, approvals and credit limits) must be explicitly represented rather than guessed.
+Business policy decisions such as VAT/tax rules, exact costing method, adjustment approvals, credit limits and negative-stock policy require explicit product/business approval before their final enforcement rules are coded.
 
 ### Next task
-TASK-002 — Database Schema & Migration Specification.
+TASK-003 — Laravel Backend Foundation + Database Migrations + Schema Tests.
 
-### TASK-002 additional mandatory requirement
-The schema specification must model real distribution packaging:
-- canonical base stock unit
-- carton/package units
-- pieces-per-carton conversion
-- carton and piece barcodes
-- carton/piece/mixed purchase, sale and return quantities
-- transaction-line conversion snapshots
-- base-unit inventory movements and costing
-- historical immutability when packaging definitions change
+---
 
+# 5. Task Completion Protocol
 ---
 
 # 5. Task Completion Protocol
