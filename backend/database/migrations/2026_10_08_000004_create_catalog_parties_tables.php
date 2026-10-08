@@ -163,7 +163,7 @@ return new class extends Migration
             $table->timestamp('captured_at');
             $table->string('verification_status', 32)->default('pending');
             $table->timestamps();
-            $table->index(['organization_id', 'customer_id', 'captured_at']);
+            $table->index(['organization_id', 'customer_id', 'captured_at'], 'cust_loc_events_idx');
         });
         DB::statement("ALTER TABLE product_packagings ADD CONSTRAINT chk_packaging_conversion_positive CHECK (conversion_to_base > 0)");
     }
