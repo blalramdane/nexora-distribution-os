@@ -46,7 +46,7 @@ return new class extends Migration
             $table->timestamps();
             $table->unique(['organization_id', 'product_id', 'unit_id', 'name_ar']);
             $table->index(['organization_id', 'product_id', 'active']);
-            $table->check('conversion_to_base > 0');
+
         });
 
         Schema::create('product_barcodes', function (Blueprint $table): void {
@@ -165,6 +165,7 @@ return new class extends Migration
             $table->timestamps();
             $table->index(['organization_id', 'customer_id', 'captured_at']);
         });
+        DB::statement("ALTER TABLE product_packagings ADD CONSTRAINT chk_packaging_conversion_positive CHECK (conversion_to_base > 0)");
     }
 
     public function down(): void
