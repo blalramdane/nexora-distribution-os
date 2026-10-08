@@ -122,9 +122,9 @@ return new class extends Migration
             $table->timestamps();
             $table->index(['organization_id', 'account_id', 'occurred_at']);
             $table->index(['organization_id', 'transaction_uuid']);
-            $table->check('debit >= 0');
-            $table->check('credit >= 0');
-            $table->check('(debit = 0 AND credit > 0) OR (credit = 0 AND debit > 0)');
+
+
+
         });
 
         Schema::create('stock_movements', function (Blueprint $table): void {
@@ -148,8 +148,8 @@ return new class extends Migration
             $table->index(['organization_id', 'product_id', 'location_id', 'occurred_at']);
             $table->index(['organization_id', 'source_document_type', 'source_document_id']);
             $table->index(['organization_id', 'transaction_uuid']);
-            $table->check('quantity_base <> 0');
-            $table->check('unit_cost >= 0');
+
+
         });
 
         Schema::create('stock_balances', function (Blueprint $table): void {
