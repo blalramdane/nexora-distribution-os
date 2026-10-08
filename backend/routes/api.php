@@ -41,6 +41,10 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/payments', [PaymentController::class, 'store']);
     Route::post('/returns/sales', [ReturnController::class, 'sales']);
     Route::post('/returns/purchases', [ReturnController::class, 'purchases']);
-    Route::post('/trip-loads', [TripLoadController::class, 'store']);
+        Route::get('/trips', [TripController::class, 'index']);
+        Route::get('/vehicles', [TripController::class, 'vehicles']);
+        Route::post('/trips', [TripController::class, 'store']);
+        Route::post('/trips/{trip}/customers', [TripController::class, 'assignCustomer']);
+        Route::post('/trip-loads', [TripLoadController::class, 'store']);
     });
 });
