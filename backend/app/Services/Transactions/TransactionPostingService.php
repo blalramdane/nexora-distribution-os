@@ -355,7 +355,7 @@ final class TransactionPostingService
                 $loaded = (string)DB::table('stock_movements')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->where('product_id',$productId)->where('movement_type','vehicle_load')->sum('quantity_base');
                 $sold = (string)DB::table('stock_movements')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->where('product_id',$productId)->where('movement_type','sale')->sum('quantity_base');
                 $returned = (string)DB::table('stock_movements')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->where('product_id',$productId)->where('movement_type','sales_return')->sum('quantity_base');
-                $transferred = (string)DB::table('stock_movements')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->where('product_id',$productId)->whereIn('movement_type',['transfer_out','transfer_in'])->sum('quantity_base');
+                $transferred = (string)DB::table('stock_movements')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->where('product_id',$productId)->whereIn('movement_type',['transfer_out','transfer_in'])->where('source_document_type','<>','trip_load')->sum('quantity_base');
                 $expected = bcadd(bcadd($loaded,$sold,6),bcadd($returned,$transferred,6),6);
                 $movementRows->push((object)['product_id'=>$productId,'loaded'=>$loaded,'sold'=>$sold,'returned'=>$returned,'transferred'=>$transferred,'expected_closing'=>$expected]);
             }
