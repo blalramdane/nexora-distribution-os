@@ -24,10 +24,29 @@ class DocumentSequenceSeeder extends Seeder
 
         foreach ($organizations as $organizationId) {
             foreach ($types as [$type,$prefix]) {
-                DB::table('document_sequences')->updateOrInsert(
-                    ['organization_id'=>$organizationId,'document_type'=>$type],
-                    ['id'=>(string) Str::ulid(),'prefix'=>$prefix,'next_number'=>1,'padding'=>6,'reset_policy'=>'never','active'=>true,'updated_at'=>now(),'created_at'=>now()]
-                );
+                DB::table('document_sequences')->insertOrIgnore([
+                    'id'=>(string) Str::ulid(),
+                    'organization_id'=>$organizationId,
+                    'document_type'=>$type,
+                    'prefix'=>$prefix,
+                    'next_number'=>1,
+                    'padding'=>6,
+                    'reset_policy'=>'never',
+                    'active'=>true,
+                    'created_at'=>now(),
+                    'updated_at'=>now(),
+                ]);
+
+                DB::table('document_sequences')
+                    ->where('organization_id',$organizationId)
+                    ->where('document_type',$type)
+                    ->update([
+                        'prefix'=>$prefix,
+                        'padding'=>6,
+                        'reset_policy'=>'never',
+                        'active'=>true,
+                        'updated_at'=>now(),
+                    ]);
             }
         }
     }
