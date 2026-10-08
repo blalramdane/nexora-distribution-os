@@ -10,6 +10,9 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             PermissionSeeder::class,
+            EgyptGeographySeeder::class,
+            ReferenceDataSeeder::class,
+            DocumentSequenceSeeder::class,
         ]);
     }
 }
