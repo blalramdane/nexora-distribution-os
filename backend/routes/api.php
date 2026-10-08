@@ -45,6 +45,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/trips', [TripController::class, 'index']);
         Route::get('/vehicles', [TripController::class, 'vehicles']);
         Route::post('/trips', [TripController::class, 'store']);
+        Route::get('/trips/{trip}/stock', [TripController::class, 'stock']);
         Route::post('/trips/{trip}/customers', [TripController::class, 'assignCustomer']);
         Route::post('/trip-loads', [TripLoadController::class, 'store']);
         Route::post('/trip-settlements', [TripSettlementController::class, 'store']);
