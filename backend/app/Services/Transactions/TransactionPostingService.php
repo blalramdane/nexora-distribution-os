@@ -584,14 +584,16 @@ final class TransactionPostingService
             $tx = (string) Str::uuid();
 
             if ($partyType === 'customer' && $direction === 'inbound') {
-                $this->ledger($organizationId,$tx,$accounts['cash'], $amount,0,'payment',$paymentId);
+                $financialLedger = $this->ledgerAccountForFinancialAccount($organizationId, $account);
+                $this->ledger($organizationId,$tx,$financialLedger, $amount,0,'payment',$paymentId);
                 $this->ledger($organizationId,$tx,$accounts['accounts_receivable'],0,$amount,'payment',$paymentId);
                 DB::statement("INSERT INTO customer_balance_summaries (id,organization_id,customer_id,total_paid,outstanding,last_payment_at,updated_at) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_paid=total_paid+VALUES(total_paid), outstanding=outstanding-VALUES(total_paid), last_payment_at=VALUES(last_payment_at), updated_at=VALUES(updated_at)", [
                     (string)Str::ulid(),$organizationId,$partyId,$amount,bcsub('0',$amount,4),now(),now()
                 ]);
             } elseif ($partyType === 'supplier' && $direction === 'outbound') {
                 $this->ledger($organizationId,$tx,$accounts['accounts_payable'],$amount,0,'payment',$paymentId);
-                $this->ledger($organizationId,$tx,$accounts['cash'],0,$amount,'payment',$paymentId);
+                $financialLedger = $this->ledgerAccountForFinancialAccount($organizationId, $account);
+                $this->ledger($organizationId,$tx,$financialLedger,0,$amount,'payment',$paymentId);
                 DB::statement("INSERT INTO supplier_balance_summaries (id,organization_id,supplier_id,total_paid,outstanding,last_payment_at,updated_at) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_paid=total_paid+VALUES(total_paid), outstanding=outstanding-VALUES(total_paid), last_payment_at=VALUES(last_payment_at), updated_at=VALUES(updated_at)", [
                     (string)Str::ulid(),$organizationId,$partyId,$amount,bcsub('0',$amount,4),now(),now()
                 ]);
@@ -744,6 +746,32 @@ final class TransactionPostingService
             DB::table('document_sequences')->where('id',$sequence->id)->update(['next_number'=>$number+1,'updated_at'=>now()]);
         }
         return $p.str_pad((string)$number,$pad,'0',STR_PAD_LEFT);
+    }
+
+    private function ledgerAccountForFinancialAccount(string $organizationId, object $financialAccount): string
+    {
+        $code = 'FA-'.$financialAccount->code;
+        $existing = DB::table('ledger_accounts')
+            ->where('organization_id',$organizationId)
+            ->where('code',$code)
+            ->first();
+
+        if ($existing) return $existing->id;
+
+        $id=(string)Str::ulid();
+        DB::table('ledger_accounts')->insert([
+            'id'=>$id,
+            'organization_id'=>$organizationId,
+            'code'=>$code,
+            'name'=>$financialAccount->name,
+            'type'=>'asset',
+            'currency'=>$financialAccount->currency ?? 'EGP',
+            'active'=>true,
+            'created_at'=>now(),
+            'updated_at'=>now(),
+        ]);
+
+        return $id;
     }
 
     private function ensureLedgerAccounts(string $organizationId): array
