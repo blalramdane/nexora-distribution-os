@@ -1,0 +1,54 @@
+name: QA one-time purchase costing patch
+
+on:
+  push:
+    branches:
+      - qa/batch-2-seeder-repeatability
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    if: contains(github.event.head_commit.message, 'test: protect purchase weighted average costing')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch purchase costing
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("backend/app/Services/Transactions/TransactionPostingService.php")
+          s = p.read_text()
+          old = """                $costOfInventory = '0.0000';
+            foreach ($items as $item) {"""
+          new = """                $costOfInventory = '0.0000';
+            foreach ($items as $item) {"""
+          if old not in s:
+              raise SystemExit("anchor 1 not found")
+          old2 = """                $costOfInventory = bcadd($costOfInventory, $incomingCost, 4);"""
+          old3 = """                $incomingCost = bcmul($item['unitCost'], $item['quantityBase'], 4);"""
+          new3 = """                $unitCostBase = bcdiv($item['unitCost'], $item['conversion'], 4);
+                $incomingCost = bcmul($unitCostBase, $item['quantityBase'], 4);"""
+          if old3 not in s:
+              raise SystemExit("purchase incoming cost expression not found")
+          s = s.replace(old3, new3, 1)
+          old4 = """                    'unit_cost'=>$item['unitCost'],\n                    'source_document_type'=>'purchase_invoice'"""
+          new4 = """                    'unit_cost'=>$unitCostBase,\n                    'source_document_type'=>'purchase_invoice'"""
+          if old4 not in s:
+              raise SystemExit("purchase movement cost expression not found")
+          s = s.replace(old4, new4, 1)
+          p.write_text(s)
+          PY
+
+      - name: Commit code fix and remove one-time patcher
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/qa-one-time-purchase-costing.yml
+          git add backend/app/Services/Transactions/TransactionPostingService.php
+          git commit -m "fix: correct purchase base cost weighted average"
+          git push
