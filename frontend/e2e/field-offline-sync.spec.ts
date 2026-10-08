@@ -1,5 +1,21 @@
 import { expect, test } from "@playwright/test";
 
+async function syncOperationStatus(page: import("@playwright/test").Page) {
+  return page.evaluate(async () => {
+    const request = indexedDB.open("nexora-distribution");
+    return await new Promise<string | undefined>((resolve, reject) => {
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction("syncOperations", "readonly");
+        const get = transaction.objectStore("syncOperations").getAll();
+        get.onsuccess = () => resolve(get.result[0]?.status);
+        get.onerror = () => reject(get.error);
+      };
+    });
+  });
+}
+
 test("field visit queues offline and is acknowledged after reconnect", async ({ page, context }) => {
   await page.route("**/api/v1/field/today", async (route) => {
     await route.fulfill({
@@ -32,27 +48,27 @@ test("field visit queues offline and is acknowledged after reconnect", async ({ 
   await expect(page.getByText("عميل اختبار")).toBeVisible();
 
   await context.setOffline(true);
+  await expect(page.locator(".connection.offline")).toContainText("Offline");
+
   await page.getByRole("button", { name: "تمت" }).click();
   await expect(page.getByText("تم حفظ الزيارة محليًا وسيتم إرسالها عند عودة الإنترنت.")).toBeVisible();
 
+  await expect.poll(() => syncOperationStatus(page)).toBe("pending");
+
   const queued = await page.evaluate(async () => {
     const request = indexedDB.open("nexora-distribution");
-    return await new Promise<{ status: string; operationUuid: string }>((resolve, reject) => {
+    return await new Promise<{ operationUuid: string }>((resolve, reject) => {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
-        const db = request.result;
-        const tx = db.transaction("syncOperations", "readonly");
-        const get = tx.objectStore("syncOperations").getAll();
-        get.onsuccess = () => resolve({
-          status: get.result[0]?.status,
-          operationUuid: get.result[0]?.operationUuid,
-        });
+        const database = request.result;
+        const transaction = database.transaction("syncOperations", "readonly");
+        const get = transaction.objectStore("syncOperations").getAll();
+        get.onsuccess = () => resolve({ operationUuid: get.result[0]?.operationUuid });
         get.onerror = () => reject(get.error);
       };
     });
   });
 
-  expect(queued.status).toBe("pending");
   expect(queued.operationUuid).toBeTruthy();
 
   await page.route("**/api/v1/sync/operations", async (route) => {
@@ -63,6 +79,7 @@ test("field visit queues offline and is acknowledged after reconnect", async ({ 
     expect(body.operation_type).toBe("POST");
     expect(body.schema_version).toBe(1);
     expect(body.payload.path).toBe("/field/visits");
+
     await route.fulfill({
       status: 202,
       contentType: "application/json",
@@ -78,21 +95,6 @@ test("field visit queues offline and is acknowledged after reconnect", async ({ 
   });
 
   await context.setOffline(false);
-  await page.waitForTimeout(1500);
-
-  const completed = await page.evaluate(async () => {
-    const request = indexedDB.open("nexora-distribution");
-    return await new Promise<string>((resolve, reject) => {
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const db = request.result;
-        const tx = db.transaction("syncOperations", "readonly");
-        const get = tx.objectStore("syncOperations").getAll();
-        get.onsuccess = () => resolve(get.result[0]?.status);
-        get.onerror = () => reject(get.error);
-      };
-    });
-  });
-
-  expect(completed).toBe("completed");
+  await expect(page.locator(".connection")).toContainText("متصل");
+  await expect.poll(() => syncOperationStatus(page), { timeout: 10_000 }).toBe("completed");
 });
