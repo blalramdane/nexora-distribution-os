@@ -429,6 +429,9 @@ TASK-003 — Laravel Backend Foundation + Database Migrations + Schema Tests.
 
 ## ACTIVE TASK — TASK-003
 
+**Current batch:** 1/11 — Backend Foundation Bootstrap
+**Status:** IMPLEMENTATION COMPLETE / CI VERIFICATION PENDING
+
 ### Title
 Laravel Backend Foundation + Database Migrations + Schema Tests
 
@@ -462,6 +465,9 @@ Create the first production backend foundation from the locked architecture and 
 - Preserve packaging conversion snapshots.
 - No hard-delete model for posted transaction records.
 - Tests must prove critical database constraints.
+
+### Batch 1 acceptance
+Batch 1 is complete only when Laravel dependencies install, the application boots, migrations execute against MySQL 8.4, and the foundation tests pass in CI.
 
 ### Acceptance
 TASK-003 is complete only when the backend installs reproducibly, migrations run cleanly from an empty database, seeders are repeatable, schema tests pass, and the repository contains evidence of the test/build result.
