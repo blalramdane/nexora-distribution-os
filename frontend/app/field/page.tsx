@@ -4,7 +4,7 @@ import { MapPin, Navigation, Phone, RefreshCw, Wifi, WifiOff } from "lucide-reac
 import { api, apiWithOfflineQueue } from "@/lib/api";
 import FieldActions from "./FieldActions";
 type Customer={id:string;name:string;code:string;phone?:string;address_text?:string;latitude?:number;longitude?:number;sequence:number;visit_status:string};
-type Product={id:string;sku:string;name_ar:string;quantity_base:number};
+type Product={id:string;sku:string;name_ar:string;default_piece_price:number;quantity_base:number};
 type Trip={id:string;trip_number:string;status:string;vehicle_name:string;vehicle_code:string;vehicle_location_id:string};
 export default function Field(){
  const [trip,setTrip]=useState<Trip|null>(null),[customers,setCustomers]=useState<Customer[]>([]),[stock,setStock]=useState<Product[]>([]),[online,setOnline]=useState(true),[msg,setMsg]=useState(""),[loading,setLoading]=useState(true);
