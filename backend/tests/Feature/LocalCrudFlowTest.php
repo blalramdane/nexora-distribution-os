@@ -45,11 +45,26 @@ class LocalCrudFlowTest extends TestCase
             'payment_terms_days'=>30,
         ])->assertCreated()->json();
 
-        $supplier=DB::table('suppliers')->where('organization_id',$org->id)->where('code','SUP-DEMO')->first();
+        $createdSupplier=$this->withHeaders($headers)->postJson('/api/v1/suppliers',[
+            'name'=>'مورد E2E',
+            'code'=>'SUP-E2E-001',
+            'phone'=>'01011111111',
+            'address'=>'دمياط',
+            'credit_terms_days'=>30,
+        ])->assertCreated()->json();
+
+        $this->assertDatabaseHas('suppliers',[
+            'id'=>$createdSupplier['id'],
+            'organization_id'=>$org->id,
+            'code'=>'SUP-E2E-001',
+            'name'=>'مورد E2E',
+        ]);
+
+        $supplier=$createdSupplier;
         $location=DB::table('locations')->where('organization_id',$org->id)->where('code','MAIN-WH')->first();
 
         $this->withHeaders($headers)->postJson('/api/v1/purchases',[
-            'supplier_id'=>$supplier->id,
+            'supplier_id'=>$supplier['id'],
             'location_id'=>$location->id,
             'idempotency_key'=>'e2e-purchase-001',
             'items'=>[[
