@@ -12,7 +12,9 @@ final class TransactionPostingService
     public function postPurchase(string $organizationId, array $data): array
     {
         return DB::transaction(function () use ($organizationId, $data): array {
-            $this->claimIdempotency($organizationId, 'purchase.post', $data['idempotency_key'] ?? null);
+            if ($replay = $this->claimIdempotency($organizationId, 'purchase.post', $data['idempotency_key'] ?? null, $data)) {
+                return $this->replayPurchase($organizationId, $replay);
+            }
 
             $supplier = DB::table('suppliers')
                 ->where('organization_id', $organizationId)
@@ -130,14 +132,18 @@ final class TransactionPostingService
             $this->ledger($organizationId,$tx,$accounts['inventory'],$costOfInventory,0,'purchase_invoice',$invoiceId);
             $this->ledger($organizationId,$tx,$accounts['accounts_payable'],0,$total,'purchase_invoice',$invoiceId);
 
-            return ['id'=>$invoiceId,'document_number'=>$documentNumber,'total'=>$total,'status'=>'posted'];
+            $result = ['id'=>$invoiceId,'document_number'=>$documentNumber,'total'=>$total,'status'=>'posted'];
+            $this->completeIdempotency($organizationId, 'purchase.post', $data['idempotency_key'] ?? null, 'purchase_invoice:'.$invoiceId);
+            return $result;
         }, attempts: 5);
     }
 
     public function postSale(string $organizationId, array $data): array
     {
         return DB::transaction(function () use ($organizationId, $data): array {
-            $this->claimIdempotency($organizationId, 'sale.post', $data['idempotency_key'] ?? null);
+            if ($replay = $this->claimIdempotency($organizationId, 'sale.post', $data['idempotency_key'] ?? null, $data)) {
+                return $this->replaySale($organizationId, $replay);
+            }
 
             $customer = DB::table('customers')
                 ->where('organization_id',$organizationId)->where('id',$data['customer_id'])
@@ -222,22 +228,104 @@ final class TransactionPostingService
                 $this->ledger($organizationId,$tx,$accounts['inventory'],0,$cogs,'sales_invoice',$invoiceId);
             }
 
-            return ['id'=>$invoiceId,'document_number'=>$documentNumber,'total'=>$total,'paid_amount'=>$paid,'balance_due'=>$balanceDue,'status'=>'posted'];
+            $result = ['id'=>$invoiceId,'document_number'=>$documentNumber,'total'=>$total,'paid_amount'=>$paid,'balance_due'=>$balanceDue,'status'=>'posted'];
+            $this->completeIdempotency($organizationId, 'sale.post', $data['idempotency_key'] ?? null, 'sales_invoice:'.$invoiceId);
+            return $result;
         }, attempts:5);
     }
 
-    private function claimIdempotency(string $organizationId,string $type,?string $key): void
+    private function claimIdempotency(string $organizationId, string $type, ?string $key, array $data): ?string
     {
-        if(!$key) return;
-        try{
+        if (!$key) return null;
+
+        $fingerprint = hash('sha256', json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        try {
             DB::table('idempotency_keys')->insert([
-                'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'operation_type'=>$type,
-                'idempotency_key'=>$key,'request_fingerprint'=>hash('sha256',json_encode(request()->all())),
-                'status'=>'completed','created_at'=>now(),'completed_at'=>now(),
+                'id'=>(string) Str::ulid(),
+                'organization_id'=>$organizationId,
+                'operation_type'=>$type,
+                'idempotency_key'=>$key,
+                'request_fingerprint'=>$fingerprint,
+                'status'=>'processing',
+                'created_at'=>now(),
             ]);
-        }catch(QueryException $e){
-            throw ValidationException::withMessages(['idempotency_key'=>['This operation has already been submitted.']]);
+            return null;
+        } catch (QueryException $e) {
+            $existing = DB::table('idempotency_keys')
+                ->where('organization_id',$organizationId)
+                ->where('operation_type',$type)
+                ->where('idempotency_key',$key)
+                ->first();
+
+            if (!$existing) throw $e;
+
+            if (!hash_equals($existing->request_fingerprint, $fingerprint)) {
+                throw ValidationException::withMessages(['idempotency_key'=>['The same idempotency key was reused with a different request.']]);
+            }
+
+            if ($existing->status !== 'completed' || !$existing->response_reference) {
+                throw ValidationException::withMessages(['idempotency_key'=>['This operation is already being processed.']]);
+            }
+
+            return $existing->response_reference;
         }
+    }
+
+    private function completeIdempotency(string $organizationId, string $type, ?string $key, string $responseReference): void
+    {
+        if (!$key) return;
+
+        DB::table('idempotency_keys')
+            ->where('organization_id',$organizationId)
+            ->where('operation_type',$type)
+            ->where('idempotency_key',$key)
+            ->update([
+                'status'=>'completed',
+                'response_reference'=>$responseReference,
+                'completed_at'=>now(),
+            ]);
+    }
+
+    private function replayPurchase(string $organizationId, string $reference): array
+    {
+        [$type, $id] = array_pad(explode(':',$reference,2),2,null);
+        if ($type !== 'purchase_invoice' || !$id) {
+            throw ValidationException::withMessages(['idempotency_key'=>['Stored idempotency response is invalid.']]);
+        }
+
+        $invoice = DB::table('purchase_invoices')
+            ->where('organization_id',$organizationId)->where('id',$id)->first();
+
+        if (!$invoice) {
+            throw ValidationException::withMessages(['idempotency_key'=>['Stored purchase response could not be replayed.']]);
+        }
+
+        return ['id'=>$invoice->id,'document_number'=>$invoice->document_number,'total'=>$invoice->total,'status'=>$invoice->status];
+    }
+
+    private function replaySale(string $organizationId, string $reference): array
+    {
+        [$type, $id] = array_pad(explode(':',$reference,2),2,null);
+        if ($type !== 'sales_invoice' || !$id) {
+            throw ValidationException::withMessages(['idempotency_key'=>['Stored idempotency response is invalid.']]);
+        }
+
+        $invoice = DB::table('sales_invoices')
+            ->where('organization_id',$organizationId)->where('id',$id)->first();
+
+        if (!$invoice) {
+            throw ValidationException::withMessages(['idempotency_key'=>['Stored sales response could not be replayed.']]);
+        }
+
+        return [
+            'id'=>$invoice->id,
+            'document_number'=>$invoice->document_number,
+            'total'=>$invoice->total,
+            'paid_amount'=>$invoice->paid_amount,
+            'balance_due'=>$invoice->balance_due,
+            'status'=>$invoice->status,
+        ];
     }
 
     private function nextDocumentNumber(string $organizationId,string $type,string $prefix): string
