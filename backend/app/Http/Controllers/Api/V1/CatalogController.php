@@ -24,6 +24,26 @@ class CatalogController extends Controller
         return response()->json($query->orderBy('name_ar')->limit(50)->get());
     }
 
+    public function references(Request $request)
+    {
+        $org = $request->user()->organization_id;
+
+        return response()->json([
+            'units' => DB::table('units')
+                ->where(function ($q) use ($org) {
+                    $q->whereNull('organization_id')->orWhere('organization_id', $org);
+                })
+                ->where('active', true)
+                ->orderBy('name_ar')
+                ->get(['id', 'code', 'name_ar', 'name_en', 'precision']),
+            'categories' => DB::table('categories')
+                ->where('organization_id', $org)
+                ->where('active', true)
+                ->orderBy('name_ar')
+                ->get(['id', 'code', 'name_ar', 'name_en', 'parent_id']),
+        ]);
+    }
+
     public function storeProduct(Request $request)
     {
         $data=$request->validate([
