@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\V1\TripLoadController;
 use App\Http\Controllers\Api\V1\TripController;
 use App\Http\Controllers\Api\V1\TripSettlementController;
 use App\Http\Controllers\Api\V1\FieldController;
+use App\Http\Controllers\Api\V1\SyncController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/v1/health', static fn () => response()->json([
@@ -50,6 +51,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/trips/{trip}/customers', [TripController::class, 'assignCustomer']);
         Route::post('/trip-loads', [TripLoadController::class, 'store']);
         Route::post('/trip-settlements', [TripSettlementController::class, 'store']);
+        Route::post('/sync/operations', [SyncController::class, 'store']);
         Route::get('/field/today', [FieldController::class, 'today']);
         Route::post('/field/visits', [FieldController::class, 'visit']);
         Route::post('/field/customers', [FieldController::class, 'createCustomer']);
