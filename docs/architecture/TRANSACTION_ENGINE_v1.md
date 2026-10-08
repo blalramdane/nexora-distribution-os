@@ -56,3 +56,20 @@ Core transaction commits first. External side effects (WhatsApp, webhooks, notif
 
 ## Invariants
 No sale without stock effect; no purchase without receipt; no payment without financial account; no stock balance change without movement; no duplicate idempotency key; no posted hard delete; offline ACK references the exact operation UUID.
+
+
+## Packaging / Unit Conversion Rules
+
+The transaction engine supports products sold and purchased in multiple units, especially **cartons and individual pieces**.
+
+- Every product has a canonical base stock unit.
+- Packaging definitions store the conversion factor, e.g. 1 carton = 50 pieces.
+- Posted transaction lines snapshot the entered unit, conversion factor, entered quantity and normalized base quantity.
+- Inventory ledger movements are always posted in the canonical base unit.
+- Mixed quantities are supported: 2 cartons + 7 pieces becomes 107 base pieces when the carton factor is 50.
+- COGS and inventory valuation operate on normalized base quantity.
+- Purchase and sales returns reuse the original unit/conversion snapshot when linked to a source line.
+- Changing a packaging definition affects future transactions only; it never rewrites historical movement quantities or costs.
+- Quantity validation occurs after conversion, including stock availability checks.
+
+This rule is mandatory for the database schema and migration specification.
