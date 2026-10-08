@@ -24,6 +24,13 @@ const nav: Array<[string, string, LucideIcon]> = [
   ["التقارير","/reports",BarChart3],
 ] as const;
 
+const mobileNav: Array<[string, string, LucideIcon]> = [
+  ["الرئيسية","/",LayoutDashboard],
+  ["بيع","/sales",CircleDollarSign],
+  ["مخزون","/inventory",Package],
+  ["عملاء","/customers",Users],
+];
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -71,12 +78,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="shell-content">{children}</div>
 
       <nav className="mobile-nav">
-        {[
-          ["الرئيسية","/",LayoutDashboard],
-          ["بيع","/sales",CircleDollarSign],
-          ["مخزون","/inventory",Package],
-          ["عملاء","/customers",Users],
-        ].map(([label, href, Icon]) => {
+        {mobileNav.map(([label, href, Icon]) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href as string);
           return (
             <Link key={href as string} href={href as string} className={active ? "active" : ""}>
