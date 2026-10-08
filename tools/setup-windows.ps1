@@ -6,7 +6,7 @@ $Frontend = Join-Path $Root "frontend"
 $Tools = Join-Path $Root ".tools"
 $PhpDir = Join-Path $Tools "php83"
 $PhpZip = Join-Path $Tools "php83.zip"
-$PhpVersion = "8.3.29"
+$PhpVersion = "8.3.33"
 $PhpUrl = "https://windows.php.net/downloads/releases/php-$PhpVersion-nts-Win32-vs16-x64.zip"
 function Write-Step($Message) { Write-Host ("==> " + $Message) -ForegroundColor Cyan }
 $systemPhp = $null
