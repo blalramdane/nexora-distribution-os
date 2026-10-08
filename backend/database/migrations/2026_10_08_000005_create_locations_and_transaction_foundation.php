@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -162,6 +163,11 @@ return new class extends Migration
             $table->unique(['organization_id', 'product_id', 'location_id']);
         });
     }
+
+        DB::statement("ALTER TABLE ledger_entries ADD CONSTRAINT chk_ledger_entry_side CHECK ((debit = 0 AND credit > 0) OR (credit = 0 AND debit > 0))");
+        DB::statement("ALTER TABLE ledger_entries ADD CONSTRAINT chk_ledger_entry_nonnegative CHECK (debit >= 0 AND credit >= 0)");
+        DB::statement("ALTER TABLE stock_movements ADD CONSTRAINT chk_stock_movement_quantity_nonzero CHECK (quantity_base <> 0)");
+        DB::statement("ALTER TABLE stock_movements ADD CONSTRAINT chk_stock_movement_cost_nonnegative CHECK (unit_cost >= 0)");
 
     public function down(): void
     {
