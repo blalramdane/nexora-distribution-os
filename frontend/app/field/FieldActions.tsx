@@ -14,7 +14,7 @@ export default function FieldActions({trip,customer,stock,onDone}:{trip:Trip;cus
   try{
    if(mode==="collection"){if(Number(amount)<=0||!account||!method)return setMsg("اختار حساب وطريقة الدفع وأدخل مبلغ التحصيل.");await apiWithOfflineQueue("/payments",{method:"POST",body:JSON.stringify({party_type:"customer",party_id:customer.id,financial_account_id:account,payment_method_id:method,direction:"inbound",amount:Number(amount),trip_id:trip.id,idempotency_key:crypto.randomUUID()})});setMsg("تم حفظ التحصيل.");onDone();return}
    if(!product||Number(qty)<=0)return setMsg("اختار الصنف والكمية.");
-   const payload={customer_id:customer.id,location_id:"",trip_id:trip.id,idempotency_key:crypto.randomUUID(),items:[{product_id:product.id,quantity:Number(qty),unit_price:Number(price||0)}]};
+   const payload={customer_id:customer.id,location_id:trip.vehicle_location_id,trip_id:trip.id,idempotency_key:crypto.randomUUID(),items:[{product_id:product.id,quantity:Number(qty),unit_price:Number(price||0)}]};
    if(mode==="return"){await apiWithOfflineQueue("/returns/sales",{method:"POST",body:JSON.stringify(payload)});setMsg("تم حفظ المرتجع.");}
    else {await apiWithOfflineQueue("/sales",{method:"POST",body:JSON.stringify(payload)});setMsg("تم حفظ البيع.");}
    onDone();
