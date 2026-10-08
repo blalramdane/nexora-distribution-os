@@ -22,3 +22,8 @@ Commit examples:
 - fix(sync): prevent duplicate payment posting
 - test(trips): cover settlement variance
 - docs(architecture): define sync protocol
+## Mandatory Change Guard
+
+Before every non-trivial change, follow `docs/engineering/NEXORA_PROJECT_CHANGE_GUARD.md`. It is the persistent project-safety checklist for context review, dependency impact, regression analysis, tests, CI, and verification.
+
+For cross-cutting changes, review the full affected subsystem rather than only the file being edited. Never treat a passing build alone as proof that the architecture remains intact.
