@@ -165,7 +165,7 @@ class OfflineSyncTransactionExecutionTest extends TestCase
             'organization_id' => $organization->id,
             'operation_uuid' => $operationUuid,
             'status' => 'rejected',
-            'rejection_code' => 'transaction_error',
+            'rejection_code' => 'validation_error',
         ]);
 
         $this->assertSame(0, DB::table('sales_invoices')
