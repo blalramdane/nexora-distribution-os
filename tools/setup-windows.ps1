@@ -26,8 +26,9 @@ if ($useLocalPhp) {
     $env:PHPRC = Join-Path $PhpDir "php.ini"
     Remove-Item Env:PHP_INI_SCAN_DIR -ErrorAction SilentlyContinue
 }
-$phpVersion = (& php -r "echo PHP_VERSION;").Trim()
-if ([version]$phpVersion -lt [version]"8.3.0") { throw "NEXORA requires PHP 8.3+. Detected $phpVersion." }
+$phpVersion = (& php -r "echo PHP_VERSION;" 2>$null | Select-Object -Last 1).Trim()
+try { $parsedPhpVersion = [version]$phpVersion } catch { throw "Unable to detect a valid PHP version. Detected output: $phpVersion" }
+if ($parsedPhpVersion -lt [version]"8.3.0") { throw "NEXORA requires PHP 8.3+. Detected $phpVersion." }
 Write-Host "Using PHP $phpVersion"
 if (-not (Test-Path (Join-Path $PhpDir "php.ini"))) {
     if (Test-Path (Join-Path $PhpDir "php.ini-development")) { Copy-Item (Join-Path $PhpDir "php.ini-development") (Join-Path $PhpDir "php.ini") }
