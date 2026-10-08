@@ -22,5 +22,7 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+      - run: npx playwright install --with-deps chromium
       - run: npm run lint
       - run: npm run build
+      - run: npm run test:e2e
