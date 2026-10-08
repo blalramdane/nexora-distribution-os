@@ -23,10 +23,24 @@ class EgyptGeographySeeder extends Seeder
         ];
 
         foreach ($governorates as [$code,$ar,$en]) {
-            DB::table('governorates')->updateOrInsert(
-                ['code'=>$code],
-                ['id'=>(string) Str::ulid(),'name_ar'=>$ar,'name_en'=>$en,'active'=>true,'updated_at'=>now(),'created_at'=>now()]
-            );
+            DB::table('governorates')->insertOrIgnore([
+                'id'=>(string) Str::ulid(),
+                'code'=>$code,
+                'name_ar'=>$ar,
+                'name_en'=>$en,
+                'active'=>true,
+                'created_at'=>now(),
+                'updated_at'=>now(),
+            ]);
+
+            DB::table('governorates')
+                ->where('code',$code)
+                ->update([
+                    'name_ar'=>$ar,
+                    'name_en'=>$en,
+                    'active'=>true,
+                    'updated_at'=>now(),
+                ]);
         }
     }
 }
