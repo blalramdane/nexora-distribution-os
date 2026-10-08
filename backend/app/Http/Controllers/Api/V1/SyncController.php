@@ -117,13 +117,17 @@ final class SyncController extends Controller
             ]);
 
             try {
-                $result = $this->dispatchTransaction(
+                if ($data['operation_type'] === 'field.visit') {
+                    $result = ['operation_type' => 'field.visit', 'status' => 'accepted'];
+                } else {
+                    $result = $this->dispatchTransaction(
                     $organizationId,
                     $request->user()->id,
                     $device->id,
                     $data,
                     $posting
-                );
+                    );
+                }
 
                 $reference = $this->resultReference($data['operation_type'], $result);
 
