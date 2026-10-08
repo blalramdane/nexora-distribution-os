@@ -1,6 +1,7 @@
 "use client";
 import { useEffect,useState } from "react";
 import { CircleDollarSign, Search, WalletCards, Building2 } from "lucide-react";
+import type { ComponentType } from "react";
 import { api } from "@/lib/api";
 type Party={id:string;name:string;code:string;phone?:string};
 type Ref={accounts:{id:string;name:string;code:string}[];payment_methods:{id:string;name_ar:string;code:string;requires_reference:boolean}[]};
