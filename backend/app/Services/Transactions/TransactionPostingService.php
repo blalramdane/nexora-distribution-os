@@ -234,6 +234,197 @@ final class TransactionPostingService
         }, attempts:5);
     }
 
+    public function postPayment(string $organizationId, array $data): array
+    {
+        return DB::transaction(function () use ($organizationId, $data): array {
+            if ($replay = $this->claimIdempotency($organizationId, 'payment.post', $data['idempotency_key'] ?? null, $data)) {
+                return $this->replayPayment($organizationId, $replay);
+            }
+
+            $partyType = $data['party_type'];
+            $partyId = $data['party_id'];
+            $direction = $data['direction'];
+            $amount = (string) $data['amount'];
+
+            if (!in_array($partyType, ['customer','supplier'], true)) {
+                throw ValidationException::withMessages(['party_type'=>['Unsupported payment party type.']]);
+            }
+            if (!in_array($direction, ['inbound','outbound'], true)) {
+                throw ValidationException::withMessages(['direction'=>['Unsupported payment direction.']]);
+            }
+            if ($amount <= 0) {
+                throw ValidationException::withMessages(['amount'=>['Payment amount must be greater than zero.']]);
+            }
+
+            $partyTable = $partyType === 'customer' ? 'customers' : 'suppliers';
+            $party = DB::table($partyTable)
+                ->where('organization_id',$organizationId)
+                ->where('id',$partyId)
+                ->first();
+
+            if (!$party) {
+                throw ValidationException::withMessages(['party_id'=>['Party was not found in this organization.']]);
+            }
+
+            $account = DB::table('financial_accounts')
+                ->where('organization_id',$organizationId)
+                ->where('id',$data['financial_account_id'])
+                ->where('active',true)
+                ->first();
+
+            if (!$account) {
+                throw ValidationException::withMessages(['financial_account_id'=>['Financial account was not found or is inactive.']]);
+            }
+
+            $method = DB::table('payment_methods')
+                ->where(function ($query) use ($organizationId) {
+                    $query->where('organization_id',$organizationId)->orWhereNull('organization_id');
+                })
+                ->where('id',$data['payment_method_id'])
+                ->where('active',true)
+                ->first();
+
+            if (!$method) {
+                throw ValidationException::withMessages(['payment_method_id'=>['Payment method was not found or is inactive.']]);
+            }
+
+            if ($method->requires_reference && empty($data['reference'])) {
+                throw ValidationException::withMessages(['reference'=>['A reference is required for this payment method.']]);
+            }
+
+            $remaining = $amount;
+            foreach (($data['allocations'] ?? []) as $allocation) {
+                $allocationAmount = (string) $allocation['amount'];
+                if (bccomp($allocationAmount,'0',4) <= 0) {
+                    throw ValidationException::withMessages(['allocations'=>['Allocation amount must be greater than zero.']]);
+                }
+                if (bccomp($allocationAmount,$remaining,4) > 0) {
+                    throw ValidationException::withMessages(['allocations'=>['Allocated amount exceeds payment amount.']]);
+                }
+
+                $documentTable = match ($partyType.':'.$allocation['document_type']) {
+                    'customer:sales_invoice' => 'sales_invoices',
+                    'supplier:purchase_invoice' => 'purchase_invoices',
+                    default => null,
+                };
+
+                if (!$documentTable) {
+                    throw ValidationException::withMessages(['allocations'=>['Invalid allocation document for this party.']]);
+                }
+
+                $document = DB::table($documentTable)
+                    ->where('organization_id',$organizationId)
+                    ->where('id',$allocation['document_id'])
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$document || ($partyType === 'customer' ? $document->customer_id !== $partyId : $document->supplier_id !== $partyId)) {
+                    throw ValidationException::withMessages(['allocations'=>['Allocation document does not belong to this party.']]);
+                }
+
+                $due = $partyType === 'customer'
+                    ? (string) $document->balance_due
+                    : bcsub((string)$document->total,(string)$document->paid_amount,4);
+
+                if (bccomp($allocationAmount,$due,4) > 0) {
+                    throw ValidationException::withMessages(['allocations'=>['Allocation exceeds document outstanding balance.']]);
+                }
+
+                DB::table('payment_allocations')->insert([
+                    'id'=>(string) Str::ulid(),
+                    'organization_id'=>$organizationId,
+                    'payment_id'=>'__PENDING__',
+                    'document_type'=>$allocation['document_type'],
+                    'document_id'=>$document->id,
+                    'amount'=>$allocationAmount,
+                    'created_at'=>now(),
+                    'updated_at'=>now(),
+                ]);
+
+                $remaining = bcsub($remaining,$allocationAmount,4);
+            }
+
+            $paymentId = (string) Str::ulid();
+            DB::table('payments')->insert([
+                'id'=>$paymentId,
+                'organization_id'=>$organizationId,
+                'party_type'=>$partyType,
+                'party_id'=>$partyId,
+                'financial_account_id'=>$account->id,
+                'payment_method_id'=>$method->id,
+                'direction'=>$direction,
+                'amount'=>$amount,
+                'currency'=>$data['currency'] ?? 'EGP',
+                'payment_date'=>$data['payment_date'] ?? now()->toDateString(),
+                'reference'=>$data['reference'] ?? null,
+                'status'=>'posted',
+                'trip_id'=>$data['trip_id'] ?? null,
+                'created_by'=>$data['created_by'] ?? null,
+                'device_id'=>$data['device_id'] ?? null,
+                'idempotency_key'=>$data['idempotency_key'] ?? null,
+                'created_at'=>now(),
+                'updated_at'=>now(),
+            ]);
+
+            foreach (($data['allocations'] ?? []) as $allocation) {
+                $documentTable = $allocation['document_type'] === 'sales_invoice' ? 'sales_invoices' : 'purchase_invoices';
+                $document = DB::table($documentTable)->where('organization_id',$organizationId)->where('id',$allocation['document_id'])->lockForUpdate()->first();
+
+                DB::table('payment_allocations')
+                    ->where('organization_id',$organizationId)
+                    ->where('document_type',$allocation['document_type'])
+                    ->where('document_id',$allocation['document_id'])
+                    ->where('payment_id','__PENDING__')
+                    ->update(['payment_id'=>$paymentId]);
+
+                $newPaid = bcadd((string)$document->paid_amount,(string)$allocation['amount'],4);
+
+                if ($allocation['document_type'] === 'sales_invoice') {
+                    DB::table('sales_invoices')->where('id',$document->id)->update([
+                        'paid_amount'=>$newPaid,
+                        'balance_due'=>bcsub((string)$document->total,$newPaid,4),
+                        'updated_at'=>now(),
+                    ]);
+                } else {
+                    DB::table('purchase_invoices')->where('id',$document->id)->update([
+                        'paid_amount'=>$newPaid,
+                        'updated_at'=>now(),
+                    ]);
+                }
+            }
+
+            $accounts = $this->ensureLedgerAccounts($organizationId);
+            $tx = (string) Str::uuid();
+
+            if ($partyType === 'customer' && $direction === 'inbound') {
+                $this->ledger($organizationId,$tx,$accounts['cash'], $amount,0,'payment',$paymentId);
+                $this->ledger($organizationId,$tx,$accounts['accounts_receivable'],0,$amount,'payment',$paymentId);
+                DB::statement("INSERT INTO customer_balance_summaries (id,organization_id,customer_id,total_paid,outstanding,last_payment_at,updated_at) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_paid=total_paid+VALUES(total_paid), outstanding=outstanding-VALUES(total_paid), last_payment_at=VALUES(last_payment_at), updated_at=VALUES(updated_at)", [
+                    (string)Str::ulid(),$organizationId,$partyId,$amount,bcsub('0',$amount,4),now(),now()
+                ]);
+            } elseif ($partyType === 'supplier' && $direction === 'outbound') {
+                $this->ledger($organizationId,$tx,$accounts['accounts_payable'],$amount,0,'payment',$paymentId);
+                $this->ledger($organizationId,$tx,$accounts['cash'],0,$amount,'payment',$paymentId);
+                DB::statement("INSERT INTO supplier_balance_summaries (id,organization_id,supplier_id,total_paid,outstanding,last_payment_at,updated_at) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_paid=total_paid+VALUES(total_paid), outstanding=outstanding-VALUES(total_paid), last_payment_at=VALUES(last_payment_at), updated_at=VALUES(updated_at)", [
+                    (string)Str::ulid(),$organizationId,$partyId,$amount,bcsub('0',$amount,4),now(),now()
+                ]);
+            } else {
+                throw ValidationException::withMessages(['direction'=>['Payment direction does not match party type.']]);
+            }
+
+            $result = [
+                'id'=>$paymentId,
+                'party_type'=>$partyType,
+                'party_id'=>$partyId,
+                'amount'=>$amount,
+                'direction'=>$direction,
+                'status'=>'posted',
+            ];
+            $this->completeIdempotency($organizationId,'payment.post',$data['idempotency_key'] ?? null,'payment:'.$paymentId);
+            return $result;
+        }, attempts:5);
+    }
+
     private function claimIdempotency(string $organizationId, string $type, ?string $key, array $data): ?string
     {
         if (!$key) return null;
@@ -302,6 +493,19 @@ final class TransactionPostingService
         }
 
         return ['id'=>$invoice->id,'document_number'=>$invoice->document_number,'total'=>$invoice->total,'status'=>$invoice->status];
+    }
+
+    private function replayPayment(string $organizationId, string $reference): array
+    {
+        [$type,$id] = array_pad(explode(':',$reference,2),2,null);
+        if ($type !== 'payment' || !$id) {
+            throw ValidationException::withMessages(['idempotency_key'=>['Stored idempotency response is invalid.']]);
+        }
+        $payment = DB::table('payments')->where('organization_id',$organizationId)->where('id',$id)->first();
+        if (!$payment) {
+            throw ValidationException::withMessages(['idempotency_key'=>['Stored payment response could not be replayed.']]);
+        }
+        return ['id'=>$payment->id,'party_type'=>$payment->party_type,'party_id'=>$payment->party_id,'amount'=>$payment->amount,'direction'=>$payment->direction,'status'=>$payment->status];
     }
 
     private function replaySale(string $organizationId, string $reference): array
