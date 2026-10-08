@@ -53,3 +53,37 @@ Trip links vehicle, rep/driver, planned customers, route, load, sales, collectio
 - Every retryable mutation is idempotent.
 - Cross-organization references are forbidden.
 - Sensitive corrections are audited.
+
+
+## Product Packaging & Sales Units
+
+A product may have multiple commercial/stock units. The canonical case for NEXORA Distribution OS is:
+
+**Carton → Pieces**
+
+For each product, packaging configuration may define:
+- base stock unit (piece/unit)
+- carton/package unit
+- pieces per carton
+- barcode(s) for carton and piece
+- optional additional packaging levels later
+
+Inventory is normalized to the base stock unit for authoritative stock movements and valuation, while the UI can display both cartons and pieces.
+
+Example:
+- 1 carton = 50 pieces
+- warehouse stock = 120 cartons + 35 pieces
+- normalized stock = 6,035 pieces
+
+Sales may be entered as:
+- full cartons
+- individual pieces
+- mixed carton + piece quantities
+
+The system must convert commercial quantities to base-unit movements without losing the entered unit context. A sale of 2 cartons + 7 pieces for a 50-piece carton posts 107 pieces out of inventory.
+
+Purchase documents may arrive by carton or piece and must preserve the source unit and conversion used at posting time. Returns must follow the same conversion rules and remain traceable to the original document where linked.
+
+Costing must remain base-unit accurate; a carton cost is converted to piece cost using the documented packaging conversion, not by rounding UI values.
+
+Packaging configuration is master data and changing it must not rewrite historical transactions; historical lines retain their unit/conversion snapshot.
