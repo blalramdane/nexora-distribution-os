@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\LocationController;
 use App\Http\Controllers\Api\V1\PurchaseController;
 use App\Http\Controllers\Api\V1\SalesController;
 use App\Http\Controllers\Api\V1\SupplierController;
+use App\Http\Controllers\Api\V1\FinanceReferenceController;
 use App\Http\Controllers\Api\V1\PaymentController;
 use App\Http\Controllers\Api\V1\ReturnController;
 use App\Http\Controllers\Api\V1\TripLoadController;
@@ -30,6 +31,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/products', [CatalogController::class, 'storeProduct']);
         Route::get('/customers', [CustomerController::class, 'index']);
         Route::get('/suppliers', [SupplierController::class, 'index']);
+        Route::get('/finance/references', [FinanceReferenceController::class, 'index']);
         Route::post('/customers', [CustomerController::class, 'store']);
         Route::get('/inventory', [InventoryController::class, 'index']);
         Route::get('/locations', [LocationController::class, 'index']);
