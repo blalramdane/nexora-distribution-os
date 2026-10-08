@@ -23,7 +23,7 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->timestamps();
             $table->unique(['organization_id', 'trip_number']);
-            $table->index(['organization_id', 'trip_date', 'vehicle_id']);
+            $table->index(['organization_id', 'trip_date', 'vehicle_id'], 'trips_date_vehicle_idx');
         });
 
         Schema::table('stock_movements', function (Blueprint $table): void {
@@ -55,7 +55,7 @@ return new class extends Migration
             $table->string('visit_status', 32)->default('planned');
             $table->timestamps();
             $table->unique(['trip_id', 'customer_id']);
-            $table->index(['organization_id', 'trip_id', 'sequence']);
+            $table->index(['organization_id', 'trip_id', 'sequence'], 'trip_customers_seq_idx');
         });
 
         Schema::create('trip_loads', function (Blueprint $table): void {
@@ -95,7 +95,7 @@ return new class extends Migration
             $table->decimal('longitude', 10, 7)->nullable();
             $table->text('notes')->nullable();
             $table->timestamps();
-            $table->index(['organization_id', 'trip_id', 'customer_id']);
+            $table->index(['organization_id', 'trip_id', 'customer_id'], 'trip_customers_customer_idx');
         });
 
         Schema::create('trip_expenses', function (Blueprint $table): void {
@@ -164,7 +164,7 @@ return new class extends Migration
             $table->timestamps();
             $table->unique(['organization_id', 'operation_uuid']);
             $table->unique(['organization_id', 'operation_type', 'idempotency_key']);
-            $table->index(['organization_id', 'device_id', 'status']);
+            $table->index(['organization_id', 'device_id', 'status'], 'sync_device_status_idx');
         });
 
         Schema::create('sync_conflicts', function (Blueprint $table): void {
@@ -198,7 +198,7 @@ return new class extends Migration
             $table->text('last_error')->nullable();
             $table->timestamp('sent_at')->nullable();
             $table->timestamps();
-            $table->index(['organization_id', 'status', 'available_at']);
+            $table->index(['organization_id', 'status', 'available_at'], 'outbox_status_time_idx');
         });
 
         Schema::create('outbox_attempts', function (Blueprint $table): void {
