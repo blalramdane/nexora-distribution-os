@@ -26,24 +26,12 @@ return new class extends Migration
             $table->index(['organization_id', 'trip_date', 'vehicle_id'], 'trips_date_vehicle_idx');
         });
 
-        Schema::table('stock_movements', function (Blueprint $table): void {
-            $table->foreign('trip_id')->references('id')->on('trips')->nullOnDelete();
-        });
-        Schema::table('sales_invoices', function (Blueprint $table): void {
-            $table->foreign('trip_id')->references('id')->nullOnDelete();
-        });
-        Schema::table('sales_returns', function (Blueprint $table): void {
-            $table->foreign('trip_id')->references('id')->nullOnDelete();
-        });
-        Schema::table('payments', function (Blueprint $table): void {
-            $table->foreign('trip_id')->references('id')->nullOnDelete();
-        });
-        Schema::table('expenses', function (Blueprint $table): void {
-            $table->foreign('trip_id')->references('id')->nullOnDelete();
-        });
-        Schema::table('expenses', function (Blueprint $table): void {
-            $table->foreign('vehicle_id')->references('id')->on('vehicles')->nullOnDelete();
-        });
+        DB::statement('ALTER TABLE stock_movements ADD CONSTRAINT stock_movements_trip_id_fk FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL');
+        DB::statement('ALTER TABLE sales_invoices ADD CONSTRAINT sales_invoices_trip_id_fk FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL');
+        DB::statement('ALTER TABLE sales_returns ADD CONSTRAINT sales_returns_trip_id_fk FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL');
+        DB::statement('ALTER TABLE payments ADD CONSTRAINT payments_trip_id_fk FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL');
+        DB::statement('ALTER TABLE expenses ADD CONSTRAINT expenses_trip_id_fk FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL');
+        DB::statement('ALTER TABLE expenses ADD CONSTRAINT expenses_vehicle_id_fk FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL');
 
         Schema::create('trip_customers', function (Blueprint $table): void {
             $table->ulid('id')->primary();
