@@ -1,10 +1,11 @@
 "use client";
 import { useEffect,useState } from "react";
 import { MapPin, Navigation, Phone, RefreshCw, Wifi, WifiOff } from "lucide-react";
-import { api, apiWithOfflineQueue } from "@/lib/api";
+import { api } from "@/lib/api";
+import FieldActions from "./FieldActions";
 type Customer={id:string;name:string;code:string;phone?:string;address_text?:string;latitude?:number;longitude?:number;sequence:number;visit_status:string};
 type Product={id:string;sku:string;name_ar:string;quantity_base:number};
-type Trip={id:string;trip_number:string;status:string;vehicle_name:string;vehicle_code:string};
+type Trip={id:string;trip_number:string;status:string;vehicle_name:string;vehicle_code:string;vehicle_location_id:string};
 export default function Field(){
  const [trip,setTrip]=useState<Trip|null>(null),[customers,setCustomers]=useState<Customer[]>([]),[stock,setStock]=useState<Product[]>([]),[online,setOnline]=useState(true),[msg,setMsg]=useState(""),[loading,setLoading]=useState(true);
  const load=()=>{setLoading(true);api<{trip:Trip|null;customers:Customer[];stock:Product[]}>("/field/today").then(x=>{setTrip(x.trip);setCustomers(x.customers);setStock(x.stock)}).catch(e=>setMsg(e.message)).finally(()=>setLoading(false))};
@@ -15,5 +16,5 @@ export default function Field(){
  <div className="field-stats"><div><strong>{customers.length}</strong><span>عملاء</span></div><div><strong>{customers.filter(c=>c.visit_status==="visited").length}</strong><span>تمت زيارتهم</span></div><div><strong>{stock.length}</strong><span>أصناف</span></div></div>
  <section className="field-card"><div className="field-card-title"><span>العملاء</span><button className="secondary" onClick={locate}><MapPin size={13}/> موقعي</button></div>{loading?<p>جاري تحميل الرحلة...</p>:customers.map(c=><article className="customer-stop" key={c.id}><div className="stop-main"><span className="stop-number">{c.sequence}</span><div><strong>{c.name}</strong><small>{c.phone||c.code}</small><small>{c.address_text||"بدون عنوان"}</small></div></div><div className="stop-actions"><button onClick={()=>visit(c,"checked_in")} className="visit-check">وصول</button><button onClick={()=>visit(c,"visited")} className="visit-done">تمت</button>{c.phone&&<a href={"tel:"+c.phone} className="icon-btn"><Phone size={14}/></a>}{c.latitude&&c.longitude&&<a target="_blank" rel="noreferrer" href={"https://www.google.com/maps/dir/?api=1&destination="+c.latitude+","+c.longitude} className="icon-btn"><Navigation size={14}/></a>}</div></article>)}</section>
  <section className="field-card"><div className="field-card-title"><span>مخزون العربية</span><span className="badge blue">{stock.length} صنف</span></div><div className="field-products">{stock.slice(0,40).map(p=><div key={p.id}><span>{p.name_ar}<small>{p.sku}</small></span><strong>{Number(p.quantity_base).toLocaleString("ar-EG")}</strong></div>)}</div></section>
- {msg&&<div className="field-toast">{msg}</div>}</main>
+ {msg&&<div className="field-toast">{msg}</div>}{trip&&customers.filter(c=>c.visit_status==="checked_in").map(c=><FieldActions key={c.id} trip={trip} customer={c} stock={stock} onDone={()=>{setMsg("تم تنفيذ العملية.");load()}}/> )}</main>
 }
