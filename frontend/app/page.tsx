@@ -14,11 +14,11 @@ type Dashboard = {
   today: string;
 };
 
-const quick = [
-  ["بيع سريع", "/sales", CircleDollarSign],
-  ["فاتورة شراء", "/purchases", ClipboardList],
-  ["عميل جديد", "/customers", Users],
-  ["تحميل عربية", "/trips", CarFront],
+const quick: Array<{ label: string; href: string; Icon: React.ComponentType<{ size?: number }> }> = [
+  { label: "بيع سريع", href: "/sales", Icon: CircleDollarSign },
+  { label: "فاتورة شراء", href: "/purchases", Icon: ClipboardList },
+  { label: "عميل جديد", href: "/customers", Icon: Users },
+  { label: "تحميل عربية", href: "/trips", Icon: CarFront },
 ];
 
 export default function Home() {
@@ -86,8 +86,8 @@ export default function Home() {
         <section className="section">
           <h2>Quick Actions</h2>
           <div className="quick">
-            {quick.map(([label,href,Icon]) => (
-              <button key={String(label)} onClick={() => window.location.href=String(href)}>
+            {quick.map(({label,href,Icon}) => (
+              <button key={label} onClick={() => window.location.href=href}>
                 <Icon size={20} />
                 <strong style={{display:"block",marginTop:8}}>{label}</strong>
                 <span className="metric-label">أقل عدد ممكن من الخطوات</span>
