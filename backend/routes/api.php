@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\InventoryController;
 use App\Http\Controllers\Api\V1\PurchaseController;
 use App\Http\Controllers\Api\V1\SalesController;
+use App\Http\Controllers\Api\V1\PaymentController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/v1/health', static fn () => response()->json([
@@ -28,5 +29,6 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/inventory', [InventoryController::class, 'index']);
         Route::post('/purchases', [PurchaseController::class, 'store']);
         Route::post('/sales', [SalesController::class, 'store']);
+    Route::post('/payments', [PaymentController::class, 'store']);
     });
 });
