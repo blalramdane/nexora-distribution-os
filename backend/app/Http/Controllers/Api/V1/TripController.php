@@ -23,6 +23,13 @@ class TripController extends Controller{
   DB::transaction(function()use(&$trip,$data,$org,$request){$tripId=(string)Str::ulid();$trip=['id'=>$tripId,'organization_id'=>$org,'trip_number'=>$this->number($org,'trip'),'vehicle_id'=>$data['vehicle_id'],'rep_user_id'=>$data['rep_user_id'],'status'=>'planned','trip_date'=>$data['trip_date']??now()->toDateString(),'origin_location_id'=>$data['origin_location_id'],'notes'=>$data['notes']??null,'created_at'=>now(),'updated_at'=>now()];DB::table('trips')->insert($trip);});
   return response()->json($trip,201);
  }
+ public function stock(Request $request,string $trip){
+  $org=$request->user()->organization_id;
+  $row=DB::table('trips')->where('organization_id',$org)->where('id',$trip)->first();
+  abort_unless($row,404);
+  $location=DB::table('vehicles')->where('organization_id',$org)->where('id',$row->vehicle_id)->value('location_id');
+  return response()->json(DB::table('stock_balances as s')->join('products as p','p.id','=','s.product_id')->where('s.organization_id',$org)->where('s.location_id',$location)->where('s.quantity_base','>',0)->select('p.id as product_id','p.sku','p.name_ar','s.quantity_base','s.average_cost')->orderBy('p.name_ar')->get());
+ }
  public function assignCustomer(Request $request,string $trip){
   $data=$request->validate(['customer_id'=>['required','string','size:26'],'sequence'=>['nullable','integer','min:1']]);$org=$request->user()->organization_id;
   abort_unless(DB::table('trips')->where('id',$trip)->where('organization_id',$org)->exists(),404);
