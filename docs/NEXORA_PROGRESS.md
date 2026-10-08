@@ -4,6 +4,36 @@
 > المصدر التشغيلي: GitHub `main`
 
 ## الحالة الحالية
+## Phase 0 Evidence Update — 2026-10-08 18:05 Cairo
+
+### Verified
+- Repository: `blalramdane/nexora-distribution-os`
+- `main` was at commit `05224d79049f85d5dfc7999082fa54ce32a90e82` before this stabilization pass.
+- PR #7 was reviewed and its Backend CI was green (run **37812110348**, conclusion **success**).
+- PR #7 was merged safely into `main` as commit `5ad8438dc35c09989924b4ac9839fd630f0dd753`.
+- PR #8 was reviewed and retargeted from `qa/batch-2-seeder-repeatability` to `main`.
+- PR #8 currently contains local CRUD/demo flow work; its demo auth route is explicitly limited to `local/testing`.
+- PR #8 latest recorded Backend + Frontend CI for head `ac02bb3222e86bb115def2c56a490d9f096b08d0` were green before the latest seeder hardening commit.
+- A security hardening change was added to PR #8 so `DemoOrganizationSeeder` only runs in `local/testing` and cannot create demo credentials during production seeding.
+
+### Current Blockers
+- [ ] New CI evidence for PR #8 after the latest seeder hardening commit.
+- [ ] Fresh migration/seed/re-seed/rollback runtime verification against MySQL 8.4.
+- [ ] Full backend test suite verification after PR #7 merge.
+- [ ] Accounting reconciliation gate.
+- [ ] Tenant isolation + idempotency runtime verification.
+
+### Decision
+- **PR #7: SAFE TO MERGE — MERGED.**
+- **PR #8: NOT MERGED YET.** Wait for fresh CI evidence after the seeder hardening change, then perform the local CRUD/business-flow verification before merge.
+
+### Next Execution
+1. Verify PR #8 fresh CI.
+2. Run/verify database lifecycle gate.
+3. Run full backend tests.
+4. Verify transaction/accounting invariants.
+5. Continue to Security/Tenant Isolation.
+
 
 **Stage:** Stabilization / CI → Runtime Verification  
 **Overall:** قيد التنفيذ — لا نعتبر النظام Production-ready حتى تنجح CI واختبارات الـ business flows.
