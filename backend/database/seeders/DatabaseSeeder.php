@@ -13,7 +13,12 @@ class DatabaseSeeder extends Seeder
             EgyptGeographySeeder::class,
             ReferenceDataSeeder::class,
             DocumentSequenceSeeder::class,
-            DemoOrganizationSeeder::class,
         ]);
+
+        if (app()->environment(['local', 'testing'])) {
+            $this->call([
+                DemoOrganizationSeeder::class,
+            ]);
+        }
     }
 }
