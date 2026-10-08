@@ -293,6 +293,7 @@ final class TransactionPostingService
             }
 
             $remaining = $amount;
+            $validatedAllocations = [];
             foreach (($data['allocations'] ?? []) as $allocation) {
                 $allocationAmount = (string) $allocation['amount'];
                 if (bccomp($allocationAmount,'0',4) <= 0) {
@@ -330,16 +331,11 @@ final class TransactionPostingService
                     throw ValidationException::withMessages(['allocations'=>['Allocation exceeds document outstanding balance.']]);
                 }
 
-                DB::table('payment_allocations')->insert([
-                    'id'=>(string) Str::ulid(),
-                    'organization_id'=>$organizationId,
-                    'payment_id'=>'__PENDING__',
+                $validatedAllocations[] = [
                     'document_type'=>$allocation['document_type'],
                     'document_id'=>$document->id,
                     'amount'=>$allocationAmount,
-                    'created_at'=>now(),
-                    'updated_at'=>now(),
-                ]);
+                ];
 
                 $remaining = bcsub($remaining,$allocationAmount,4);
             }
@@ -366,16 +362,20 @@ final class TransactionPostingService
                 'updated_at'=>now(),
             ]);
 
-            foreach (($data['allocations'] ?? []) as $allocation) {
+            foreach ($validatedAllocations as $allocation) {
                 $documentTable = $allocation['document_type'] === 'sales_invoice' ? 'sales_invoices' : 'purchase_invoices';
                 $document = DB::table($documentTable)->where('organization_id',$organizationId)->where('id',$allocation['document_id'])->lockForUpdate()->first();
 
-                DB::table('payment_allocations')
-                    ->where('organization_id',$organizationId)
-                    ->where('document_type',$allocation['document_type'])
-                    ->where('document_id',$allocation['document_id'])
-                    ->where('payment_id','__PENDING__')
-                    ->update(['payment_id'=>$paymentId]);
+                DB::table('payment_allocations')->insert([
+                    'id'=>(string)Str::ulid(),
+                    'organization_id'=>$organizationId,
+                    'payment_id'=>$paymentId,
+                    'document_type'=>$allocation['document_type'],
+                    'document_id'=>$allocation['document_id'],
+                    'amount'=>$allocation['amount'],
+                    'created_at'=>now(),
+                    'updated_at'=>now(),
+                ]);
 
                 $newPaid = bcadd((string)$document->paid_amount,(string)$allocation['amount'],4);
 
