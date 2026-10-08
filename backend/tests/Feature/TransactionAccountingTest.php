@@ -184,6 +184,157 @@ class TransactionAccountingTest extends TestCase
         $this->assertSame('0.0000', number_format((float) $settlement['cash_variance'], 4, '.', ''));
     }
 
+
+    public function test_sales_return_reconciles_invoice_stock_and_balances_ledger(): void
+    {
+        [$organization, $user, $unitId, $productId, $customerId, $locationId] = $this->foundation();
+
+        DB::table('stock_balances')->insert([
+            'id' => (string) Str::ulid(),
+            'organization_id' => $organization->id,
+            'product_id' => $productId,
+            'location_id' => $locationId,
+            'quantity_base' => 10,
+            'reserved_quantity_base' => 0,
+            'average_cost' => 40,
+            'updated_at' => now(),
+        ]);
+
+        $service = app(TransactionPostingService::class);
+        $sale = $service->postSale($organization->id, [
+            'customer_id' => $customerId,
+            'location_id' => $locationId,
+            'items' => [[
+                'product_id' => $productId,
+                'quantity' => 1,
+                'conversion_factor' => 1,
+                'unit_price' => 100,
+                'unit_id' => $unitId,
+            ]],
+            'paid_amount' => 30,
+            'created_by' => $user->id,
+        ]);
+
+        $saleItemId = DB::table('sales_invoice_items')
+            ->where('sales_invoice_id', $sale['id'])
+            ->value('id');
+
+        $return = $service->postSalesReturn($organization->id, [
+            'customer_id' => $customerId,
+            'location_id' => $locationId,
+            'original_sales_invoice_id' => $sale['id'],
+            'items' => [[
+                'product_id' => $productId,
+                'quantity' => 0.5,
+                'conversion_factor' => 1,
+                'unit_price' => 100,
+                'original_sales_invoice_item_id' => $saleItemId,
+            ]],
+            'created_by' => $user->id,
+        ]);
+
+        $this->assertTransactionBalanced($organization->id, 'sales_invoice', $sale['id']);
+        $this->assertTransactionBalanced($organization->id, 'sales_return', $return['id']);
+
+        $this->assertDatabaseHas('sales_invoices', [
+            'id' => $sale['id'],
+            'paid_amount' => '30.0000',
+            'balance_due' => '20.0000',
+        ]);
+
+        $this->assertSame(
+            '9.500000',
+            number_format((float) DB::table('stock_balances')
+                ->where('organization_id', $organization->id)
+                ->where('product_id', $productId)
+                ->where('location_id', $locationId)
+                ->value('quantity_base'), 6, '.', '')
+        );
+    }
+
+    public function test_purchase_return_reconciles_supplier_balance_stock_and_ledger(): void
+    {
+        [$organization, $user, $unitId, $productId, $customerId, $locationId] = $this->foundation();
+
+        $supplierId = (string) Str::ulid();
+        DB::table('suppliers')->insert([
+            'id' => $supplierId,
+            'organization_id' => $organization->id,
+            'code' => 'SUP-01',
+            'name' => 'Test Supplier',
+            'normalized_name' => 'test supplier',
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $service = app(TransactionPostingService::class);
+        $purchase = $service->postPurchase($organization->id, [
+            'supplier_id' => $supplierId,
+            'location_id' => $locationId,
+            'items' => [[
+                'product_id' => $productId,
+                'quantity' => 1,
+                'conversion_factor' => 1,
+                'unit_cost' => 100,
+                'unit_id' => $unitId,
+            ]],
+            'created_by' => $user->id,
+        ]);
+
+        $purchaseItemId = DB::table('purchase_invoice_items')
+            ->where('purchase_invoice_id', $purchase['id'])
+            ->value('id');
+
+        $return = $service->postPurchaseReturn($organization->id, [
+            'supplier_id' => $supplierId,
+            'location_id' => $locationId,
+            'original_purchase_invoice_id' => $purchase['id'],
+            'items' => [[
+                'product_id' => $productId,
+                'quantity' => 0.5,
+                'conversion_factor' => 1,
+                'unit_cost' => 100,
+                'original_purchase_invoice_item_id' => $purchaseItemId,
+            ]],
+            'created_by' => $user->id,
+        ]);
+
+        $this->assertTransactionBalanced($organization->id, 'purchase_invoice', $purchase['id']);
+        $this->assertTransactionBalanced($organization->id, 'purchase_return', $return['id']);
+
+        $summary = DB::table('supplier_balance_summaries')
+            ->where('organization_id', $organization->id)
+            ->where('supplier_id', $supplierId)
+            ->first();
+
+        $this->assertSame('50.0000', number_format((float) $summary->outstanding, 4, '.', ''));
+        $this->assertSame(
+            '0.500000',
+            number_format((float) DB::table('stock_balances')
+                ->where('organization_id', $organization->id)
+                ->where('product_id', $productId)
+                ->where('location_id', $locationId)
+                ->value('quantity_base'), 6, '.', '')
+        );
+    }
+
+    private function assertTransactionBalanced(string $organizationId, string $sourceType, string $sourceId): void
+    {
+        $totals = DB::table('ledger_entries')
+            ->where('organization_id', $organizationId)
+            ->where('source_document_type', $sourceType)
+            ->where('source_document_id', $sourceId)
+            ->selectRaw('COALESCE(SUM(debit), 0) as debits, COALESCE(SUM(credit), 0) as credits')
+            ->first();
+
+        $this->assertSame(
+            number_format((float) $totals->debits, 4, '.', ''),
+            number_format((float) $totals->credits, 4, '.', ''),
+            "Unbalanced ledger transaction: {$sourceType}:{$sourceId}"
+        );
+    }
+
     private function foundation(): array
     {
         $organization = Organization::query()->create([
