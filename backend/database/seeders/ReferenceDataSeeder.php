@@ -19,7 +19,8 @@ class ReferenceDataSeeder extends Seeder
         ];
 
         foreach ($units as [$code,$ar,$en,$precision]) {
-            DB::table('units')->insertOrIgnore([
+            if (!DB::table('units')->whereNull('organization_id')->where('code',$code)->exists()) {
+                DB::table('units')->insert([
                 'id'=>(string) Str::ulid(),
                 'organization_id'=>null,
                 'code'=>$code,
@@ -29,7 +30,8 @@ class ReferenceDataSeeder extends Seeder
                 'active'=>true,
                 'created_at'=>now(),
                 'updated_at'=>now(),
-            ]);
+                ]);
+            }
 
             DB::table('units')
                 ->whereNull('organization_id')
@@ -52,7 +54,8 @@ class ReferenceDataSeeder extends Seeder
         ];
 
         foreach ($methods as [$code,$ar,$en,$ref]) {
-            DB::table('payment_methods')->insertOrIgnore([
+            if (!DB::table('payment_methods')->whereNull('organization_id')->where('code',$code)->exists()) {
+                DB::table('payment_methods')->insert([
                 'id'=>(string) Str::ulid(),
                 'organization_id'=>null,
                 'code'=>$code,
@@ -62,7 +65,8 @@ class ReferenceDataSeeder extends Seeder
                 'active'=>true,
                 'created_at'=>now(),
                 'updated_at'=>now(),
-            ]);
+                ]);
+            }
 
             DB::table('payment_methods')
                 ->whereNull('organization_id')
