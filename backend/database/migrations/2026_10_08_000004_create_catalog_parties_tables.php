@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -145,6 +146,8 @@ return new class extends Migration
             $table->timestamps();
             $table->index(['organization_id', 'customer_id']);
         });
+
+        DB::statement("ALTER TABLE product_packagings ADD CONSTRAINT chk_packaging_conversion_positive CHECK (conversion_to_base > 0)");
 
         Schema::create('customer_location_events', function (Blueprint $table): void {
             $table->ulid('id')->primary();
