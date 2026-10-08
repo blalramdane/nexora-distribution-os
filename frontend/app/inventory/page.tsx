@@ -1,6 +1,7 @@
 "use client";
 import { useEffect,useState } from "react";
 import { Box, Search, Warehouse, AlertTriangle } from "lucide-react";
+import type { ComponentType } from "react";
 import { api } from "@/lib/api";
 type Row={id:string;sku:string;name_ar:string;location_name:string;location_code:string;quantity:number;average_cost:number};
 export default function Inventory(){
