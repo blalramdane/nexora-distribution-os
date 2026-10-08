@@ -78,7 +78,7 @@ return new class extends Migration
             $table->decimal('quantity_base', 19, 6);
             $table->foreignUlid('source_stock_movement_id')->nullable()->constrained('stock_movements')->nullOnDelete();
             $table->timestamps();
-            $table->check('quantity_base > 0');
+            
         });
 
         Schema::create('customer_visits', function (Blueprint $table): void {
@@ -255,6 +255,7 @@ return new class extends Migration
             $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
             $table->unique(['organization_id', 'business_date']);
         });
+        DB::statement("ALTER TABLE trip_load_items ADD CONSTRAINT chk_trip_load_item_qty CHECK (quantity_base > 0)");
     }
 
     public function down(): void
