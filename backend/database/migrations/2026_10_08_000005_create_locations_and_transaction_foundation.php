@@ -71,7 +71,7 @@ return new class extends Migration
             $table->string('response_reference', 255)->nullable();
             $table->timestamp('created_at')->useCurrent();
             $table->timestamp('completed_at')->nullable();
-            $table->unique(['organization_id', 'operation_type', 'idempotency_key']);
+            $table->unique(['organization_id', 'operation_type', 'idempotency_key'], 'idem_org_op_key_uq');
         });
 
         Schema::create('audit_logs', function (Blueprint $table): void {
