@@ -19,10 +19,30 @@ class ReferenceDataSeeder extends Seeder
         ];
 
         foreach ($units as [$code,$ar,$en,$precision]) {
-            DB::table('units')->updateOrInsert(
-                ['organization_id'=>null,'code'=>$code],
-                ['id'=>(string) Str::ulid(),'name_ar'=>$ar,'name_en'=>$en,'precision'=>$precision,'active'=>true,'updated_at'=>now(),'created_at'=>now()]
-            );
+            if (!DB::table('units')->whereNull('organization_id')->where('code',$code)->exists()) {
+                DB::table('units')->insert([
+                'id'=>(string) Str::ulid(),
+                'organization_id'=>null,
+                'code'=>$code,
+                'name_ar'=>$ar,
+                'name_en'=>$en,
+                'precision'=>$precision,
+                'active'=>true,
+                'created_at'=>now(),
+                'updated_at'=>now(),
+                ]);
+            }
+
+            DB::table('units')
+                ->whereNull('organization_id')
+                ->where('code',$code)
+                ->update([
+                    'name_ar'=>$ar,
+                    'name_en'=>$en,
+                    'precision'=>$precision,
+                    'active'=>true,
+                    'updated_at'=>now(),
+                ]);
         }
 
         $methods = [
@@ -34,10 +54,30 @@ class ReferenceDataSeeder extends Seeder
         ];
 
         foreach ($methods as [$code,$ar,$en,$ref]) {
-            DB::table('payment_methods')->updateOrInsert(
-                ['organization_id'=>null,'code'=>$code],
-                ['id'=>(string) Str::ulid(),'name_ar'=>$ar,'name_en'=>$en,'requires_reference'=>$ref,'active'=>true,'updated_at'=>now(),'created_at'=>now()]
-            );
+            if (!DB::table('payment_methods')->whereNull('organization_id')->where('code',$code)->exists()) {
+                DB::table('payment_methods')->insert([
+                'id'=>(string) Str::ulid(),
+                'organization_id'=>null,
+                'code'=>$code,
+                'name_ar'=>$ar,
+                'name_en'=>$en,
+                'requires_reference'=>$ref,
+                'active'=>true,
+                'created_at'=>now(),
+                'updated_at'=>now(),
+                ]);
+            }
+
+            DB::table('payment_methods')
+                ->whereNull('organization_id')
+                ->where('code',$code)
+                ->update([
+                    'name_ar'=>$ar,
+                    'name_en'=>$en,
+                    'requires_reference'=>$ref,
+                    'active'=>true,
+                    'updated_at'=>now(),
+                ]);
         }
     }
 }
