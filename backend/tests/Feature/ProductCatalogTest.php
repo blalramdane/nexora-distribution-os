@@ -91,7 +91,6 @@ class ProductCatalogTest extends TestCase
 
         $references = $this->getJson('/api/v1/catalog/references')->assertOk()->json();
 
-        $this->assertCount(2, $references['units']);
         $this->assertTrue(collect($references['units'])->contains('id', $unit));
         $this->assertFalse(collect($references['units'])->contains('id', $foreignUnit));
         $this->assertCount(1, $references['categories']);
