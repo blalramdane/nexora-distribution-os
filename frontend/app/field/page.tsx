@@ -1,7 +1,7 @@
 "use client";
 import { useEffect,useState } from "react";
 import { MapPin, Navigation, Phone, RefreshCw, Wifi, WifiOff } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, apiWithOfflineQueue } from "@/lib/api";
 import FieldActions from "./FieldActions";
 type Customer={id:string;name:string;code:string;phone?:string;address_text?:string;latitude?:number;longitude?:number;sequence:number;visit_status:string};
 type Product={id:string;sku:string;name_ar:string;quantity_base:number};
