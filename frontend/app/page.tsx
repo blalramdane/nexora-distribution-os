@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ComponentType } from "react";
 import {
   ArrowLeft, BarChart3, Bell, Box, CarFront, CircleDollarSign, ClipboardList,
   FileText, LayoutDashboard, LogOut, Package, Search, Settings, Truck, Users,
@@ -61,7 +62,7 @@ export default function Home(){
       ["مصروفات اليوم",data?.expenses??0,WalletCards,"EGP","تشغيل"],
       ["الرحلات النشطة",0,Truck,"رحلة","اليوم"],
       ["المخزون",0,Box,"قطعة","آخر مزامنة"],
-    ].map(([label,value,Icon,unit,note])=><div className="card metric" key={String(label)}><div className="metric-top"><span className="metric-label">{label}</span><span className="metric-icon"><Icon size={15}/></span></div><div className="metric-value">{typeof value==="number"?money(value):value}<span className="metric-unit">{unit}</span></div><div className="metric-note">{note}</div></div>)}
+    ] as [string,number,ComponentType<{size?:number}>,string,string][]).map(([label,value,Icon,unit,note])=><div className="card metric" key={String(label)}><div className="metric-top"><span className="metric-label">{label}</span><span className="metric-icon"><Icon size={15}/></span></div><div className="metric-value">{typeof value==="number"?money(value):value}<span className="metric-unit">{unit}</span></div><div className="metric-note">{note}</div></div>)}
    </section>
    <section className="section"><div className="section-head"><h2>إجراءات سريعة</h2><span className="section-link">Minimum Input → Maximum Result</span></div>
     <div className="quick">{quick.map(([label,href,Icon,sub])=><button key={label} onClick={()=>window.location.href=href}><span className="quick-icon"><Icon size={16}/></span><span><strong>{label}</strong><span>{sub}</span></span><ArrowLeft size={14} style={{marginRight:"auto",color:"#94a3b8"}}/></button>)}</div>
