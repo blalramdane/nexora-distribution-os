@@ -16,8 +16,8 @@ button,input,select{font:inherit}button{cursor:pointer}a{text-decoration:none;co
 .brand-mark{width:36px;height:36px;border-radius:11px;background:linear-gradient(135deg,#3b82f6,#60a5fa);display:grid;place-items:center;font-weight:800;box-shadow:0 8px 24px rgba(37,99,235,.28)}
 .brand-name{font-size:16px;font-weight:800;line-height:1.1}.brand-name small{display:block;color:#8ea3c3;font-size:10px;font-weight:600;margin-top:3px}
 .nav{display:grid;gap:3px}.nav-section{font-size:10px;color:#7186a5;font-weight:700;padding:12px 10px 6px}
-.nav button{border:1px solid transparent;background:transparent;color:#aebbd0;text-align:right;padding:10px 11px;border-radius:10px;display:flex;align-items:center;gap:10px;font-size:12px;font-weight:600;width:100%}
-.nav button svg{opacity:.8}.nav button.active,.nav button:hover{background:var(--navy-2);color:#fff;border-color:rgba(96,165,250,.13)}.nav button.active svg{color:#60a5fa}
+.nav button,.nav-link{border:1px solid transparent;background:transparent;color:#aebbd0;text-align:right;padding:10px 11px;border-radius:10px;display:flex;align-items:center;gap:10px;font-size:12px;font-weight:600;width:100%;text-decoration:none;box-sizing:border-box}
+.nav button svg,.nav-link svg{opacity:.8}.nav button.active,.nav-link.active,.nav button:hover,.nav-link:hover{background:var(--navy-2);color:#fff;border-color:rgba(96,165,250,.13)}.nav button.active svg,.nav-link.active svg{color:#60a5fa}
 .sidebar-bottom{margin-top:auto;border-top:1px solid rgba(255,255,255,.08);padding-top:14px}
 .user-mini{display:flex;align-items:center;gap:9px;padding:8px}.avatar{width:32px;height:32px;border-radius:10px;background:#23385d;display:grid;place-items:center;font-size:11px;font-weight:800}.user-mini div:last-child{font-size:11px;color:#d5dfed}.user-mini small{display:block;color:#7186a5;font-size:9px;margin-top:1px}
 .logout{border:0;background:transparent;color:#8ea3c3;display:flex;align-items:center;gap:8px;font-size:11px;padding:8px;width:100%}.logout:hover{color:#fff}
