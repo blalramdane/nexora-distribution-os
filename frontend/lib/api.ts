@@ -13,4 +13,13 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return payload as T;
 }
 
+export async function apiWithOfflineQueue<T>(path:string,options:RequestInit={}):Promise<T>{
+ try{return await api<T>(path,options)}
+ catch(error){
+  if(typeof window==="undefined"||navigator.onLine)throw error;
+  const {queueOfflineOperation}=await import("./sync");
+  await queueOfflineOperation(options.method||"POST",path,options.body?JSON.parse(String(options.body)):null);
+  return {queued:true,offline:true} as T;
+ }
+}
 export { API_URL };
