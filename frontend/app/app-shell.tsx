@@ -6,6 +6,7 @@ import {
   BarChart3, Box, CircleDollarSign, ClipboardList, FileText, LayoutDashboard,
   LogOut, Package, Settings, Truck, Users, WalletCards, Warehouse
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { api } from "@/lib/api";
 
 const nav: Array<[string, string, LucideIcon]> = [
