@@ -53,9 +53,9 @@ return new class extends Migration
             $table->string('sku_snapshot', 128);
             $table->timestamps();
             $table->index(['organization_id', 'purchase_invoice_id']);
-            $table->check('entered_quantity > 0');
-            $table->check('conversion_factor_snapshot > 0');
-            $table->check('quantity_base > 0');
+
+
+
         });
 
         Schema::create('purchase_returns', function (Blueprint $table): void {
@@ -93,9 +93,9 @@ return new class extends Migration
             $table->decimal('unit_cost_base', 19, 4);
             $table->decimal('line_total', 19, 4);
             $table->timestamps();
-            $table->check('entered_quantity > 0');
-            $table->check('conversion_factor_snapshot > 0');
-            $table->check('quantity_base > 0');
+
+
+
         });
 
         Schema::create('sales_invoices', function (Blueprint $table): void {
@@ -123,9 +123,9 @@ return new class extends Migration
             $table->unique(['organization_id', 'document_number']);
             $table->index(['organization_id', 'customer_id', 'invoice_date']);
             $table->index(['organization_id', 'trip_id', 'invoice_date']);
-            $table->check('total >= 0');
-            $table->check('paid_amount >= 0');
-            $table->check('balance_due >= 0');
+
+
+
         });
 
         Schema::create('sales_invoice_items', function (Blueprint $table): void {
@@ -148,9 +148,9 @@ return new class extends Migration
             $table->string('sku_snapshot', 128);
             $table->timestamps();
             $table->index(['organization_id', 'sales_invoice_id']);
-            $table->check('entered_quantity > 0');
-            $table->check('conversion_factor_snapshot > 0');
-            $table->check('quantity_base > 0');
+
+
+
         });
 
         Schema::create('sales_returns', function (Blueprint $table): void {
@@ -190,9 +190,9 @@ return new class extends Migration
             $table->decimal('unit_cost_snapshot', 19, 4)->default(0);
             $table->decimal('line_total', 19, 4);
             $table->timestamps();
-            $table->check('entered_quantity > 0');
-            $table->check('conversion_factor_snapshot > 0');
-            $table->check('quantity_base > 0');
+
+
+
         });
 
         Schema::create('payments', function (Blueprint $table): void {
@@ -214,7 +214,7 @@ return new class extends Migration
             $table->string('idempotency_key', 255)->nullable();
             $table->timestamps();
             $table->index(['organization_id', 'party_type', 'party_id', 'payment_date']);
-            $table->check('amount > 0');
+
         });
 
         Schema::create('payment_allocations', function (Blueprint $table): void {
@@ -226,7 +226,7 @@ return new class extends Migration
             $table->decimal('amount', 19, 4);
             $table->timestamps();
             $table->index(['organization_id', 'document_type', 'document_id']);
-            $table->check('amount > 0');
+
         });
 
         Schema::create('expenses', function (Blueprint $table): void {
@@ -242,7 +242,7 @@ return new class extends Migration
             $table->string('status', 32)->default('posted')->index();
             $table->foreignUlid('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
-            $table->check('amount > 0');
+
         });
     }
 
