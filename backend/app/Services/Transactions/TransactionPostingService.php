@@ -133,9 +133,9 @@ final class TransactionPostingService
             $this->ledger($organizationId,$tx,$accounts['inventory'],$costOfInventory,0,'purchase_invoice',$invoiceId);
             $this->ledger($organizationId,$tx,$accounts['accounts_payable'],0,$total,'purchase_invoice',$invoiceId);
 
-            DB::statement("INSERT INTO supplier_balance_summaries (id,organization_id,supplier_id,total_purchases,outstanding,last_purchase_at,updated_at) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_purchases=total_purchases+VALUES(total_purchases), outstanding=outstanding+VALUES(total_purchases), last_purchase_at=VALUES(last_purchase_at), updated_at=VALUES(updated_at)", [
-                (string)Str::ulid(), $organizationId, $supplier->id, $total, $total, now(), now()
-            ]);
+            $this->adjustSupplierBalanceSummary($organizationId,$supplier->id,[
+                'total_purchases'=>$total,'outstanding'=>$total,
+            ],true);
 
             $result = ['id'=>$invoiceId,'document_number'=>$documentNumber,'total'=>$total,'status'=>'posted'];
             $this->completeIdempotency($organizationId, 'purchase.post', $data['idempotency_key'] ?? null, 'purchase_invoice:'.$invoiceId);
@@ -240,9 +240,9 @@ final class TransactionPostingService
                 $this->ledger($organizationId,$tx,$accounts['inventory'],0,$cogs,'sales_invoice',$invoiceId);
             }
 
-            DB::statement("INSERT INTO customer_balance_summaries (id,organization_id,customer_id,total_sales,total_paid,outstanding,last_sale_at,updated_at) VALUES (?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_sales=total_sales+VALUES(total_sales), total_paid=total_paid+VALUES(total_paid), outstanding=outstanding+VALUES(outstanding), last_sale_at=VALUES(last_sale_at), updated_at=VALUES(updated_at)", [
-                (string)Str::ulid(), $organizationId, $customer->id, $total, $paid, $balanceDue, now(), now()
-            ]);
+            $this->adjustCustomerBalanceSummary($organizationId,$customer->id,[
+                'total_sales'=>$total,'total_paid'=>$paid,'outstanding'=>$balanceDue,
+            ],true);
 
             $result = ['id'=>$invoiceId,'document_number'=>$documentNumber,'total'=>$total,'paid_amount'=>$paid,'balance_due'=>$balanceDue,'status'=>'posted'];
             $this->completeIdempotency($organizationId, 'sale.post', $data['idempotency_key'] ?? null, 'sales_invoice:'.$invoiceId);
@@ -539,9 +539,9 @@ final class TransactionPostingService
             }
             $this->ledger($organizationId,$tx,$accounts['cogs'],0,$this->returnCost($items),'sales_return',$returnId);
 
-            DB::statement("INSERT INTO customer_balance_summaries (id,organization_id,customer_id,total_returns,outstanding,last_sale_at,updated_at) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_returns=total_returns+VALUES(total_returns), outstanding=outstanding-VALUES(total_returns), updated_at=VALUES(updated_at)", [
-                (string)Str::ulid(),$organizationId,$customer->id,$total,bcsub('0',$total,4),now(),now()
-            ]);
+            $this->adjustCustomerBalanceSummary($organizationId,$customer->id,[
+                'total_returns'=>$total,'outstanding'=>bcsub('0',$total,4),
+            ],false);
 
             $result=['id'=>$returnId,'document_number'=>$documentNumber,'total'=>$total,'status'=>'posted'];
             $this->completeIdempotency($organizationId,'sales_return.post',$data['idempotency_key'] ?? null,'sales_return:'.$returnId);
@@ -618,9 +618,9 @@ final class TransactionPostingService
             $this->ledger($organizationId,$tx,$accounts['accounts_payable'],$total,0,'purchase_return',$returnId);
             $this->ledger($organizationId,$tx,$accounts['inventory'],0,$this->returnCost($items,true),'purchase_return',$returnId);
 
-            DB::statement("INSERT INTO supplier_balance_summaries (id,organization_id,supplier_id,total_returns,outstanding,updated_at) VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_returns=total_returns+VALUES(total_returns), outstanding=outstanding-VALUES(total_returns), updated_at=VALUES(updated_at)", [
-                (string)Str::ulid(),$organizationId,$supplier->id,$total,bcsub('0',$total,4),now()
-            ]);
+            $this->adjustSupplierBalanceSummary($organizationId,$supplier->id,[
+                'total_returns'=>$total,'outstanding'=>bcsub('0',$total,4),
+            ],false);
 
             $result=['id'=>$returnId,'document_number'=>$documentNumber,'total'=>$total,'status'=>'posted'];
             $this->completeIdempotency($organizationId,'purchase_return.post',$data['idempotency_key'] ?? null,'purchase_return:'.$returnId);
@@ -804,16 +804,16 @@ final class TransactionPostingService
                 $financialLedger = $this->ledgerAccountForFinancialAccount($organizationId, $account);
                 $this->ledger($organizationId,$tx,$financialLedger, $amount,0,'payment',$paymentId);
                 $this->ledger($organizationId,$tx,$accounts['accounts_receivable'],0,$amount,'payment',$paymentId);
-                DB::statement("INSERT INTO customer_balance_summaries (id,organization_id,customer_id,total_paid,outstanding,last_payment_at,updated_at) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_paid=total_paid+VALUES(total_paid), outstanding=outstanding-VALUES(total_paid), last_payment_at=VALUES(last_payment_at), updated_at=VALUES(updated_at)", [
-                    (string)Str::ulid(),$organizationId,$partyId,$amount,bcsub('0',$amount,4),now(),now()
-                ]);
+                $this->adjustCustomerBalanceSummary($organizationId,$partyId,[
+                    'total_paid'=>$amount,'outstanding'=>bcsub('0',$amount,4),
+                ],false,'last_payment_at');
             } elseif ($partyType === 'supplier' && $direction === 'outbound') {
                 $this->ledger($organizationId,$tx,$accounts['accounts_payable'],$amount,0,'payment',$paymentId);
                 $financialLedger = $this->ledgerAccountForFinancialAccount($organizationId, $account);
                 $this->ledger($organizationId,$tx,$financialLedger,0,$amount,'payment',$paymentId);
-                DB::statement("INSERT INTO supplier_balance_summaries (id,organization_id,supplier_id,total_paid,outstanding,last_payment_at,updated_at) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_paid=total_paid+VALUES(total_paid), outstanding=outstanding-VALUES(total_paid), last_payment_at=VALUES(last_payment_at), updated_at=VALUES(updated_at)", [
-                    (string)Str::ulid(),$organizationId,$partyId,$amount,bcsub('0',$amount,4),now(),now()
-                ]);
+                $this->adjustSupplierBalanceSummary($organizationId,$partyId,[
+                    'total_paid'=>$amount,'outstanding'=>bcsub('0',$amount,4),
+                ],false,'last_payment_at');
             } else {
                 throw ValidationException::withMessages(['direction'=>['Payment direction does not match party type.']]);
             }
