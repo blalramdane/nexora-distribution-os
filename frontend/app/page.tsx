@@ -1,4 +1,15 @@
-"use client";
+"
+
+const metrics: Array<[string, number, LucideIcon, string]> = [
+  ["مبيعات اليوم",0,CircleDollarSign,"EGP"],
+  ["تحصيلات اليوم",0,WalletCards,"EGP"],
+  ["مستحقات العملاء",0,Users,"EGP"],
+  ["مستحقات الموردين",0,WalletCards,"EGP"],
+  ["مشتريات اليوم",0,ClipboardList,"EGP"],
+  ["مصروفات اليوم",0,WalletCards,"EGP"],
+  ["الرحلات النشطة",0,Truck,"رحلة"],
+  ["وحدات المخزون",0,Package,"قطعة"],
+];use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -43,20 +54,23 @@ export default function Home() {
     </section>
 
     <section className="grid">
-      {[
-        ["مبيعات اليوم",data?.sales??0,CircleDollarSign,"EGP"],
-        ["تحصيلات اليوم",data?.collections??0,WalletCards,"EGP"],
-        ["مستحقات العملاء",data?.receivables??0,Users,"EGP"],
-        ["مستحقات الموردين",data?.payables??0,WalletCards,"EGP"],
-        ["مشتريات اليوم",data?.purchases??0,ClipboardList,"EGP"],
-        ["مصروفات اليوم",data?.expenses??0,WalletCards,"EGP"],
-        ["الرحلات النشطة",data?.active_trips??0,Truck,"رحلة"],
-        ["وحدات المخزون",data?.inventory_units??0,Package,"قطعة"],
-      ].map(([label,value,Icon,unit]) => <div className="card metric" key={String(label)}>
+      {metrics.map(([label,base,Icon,unit]) => {
+        const value = ({
+          "مبيعات اليوم": data?.sales,
+          "تحصيلات اليوم": data?.collections,
+          "مستحقات العملاء": data?.receivables,
+          "مستحقات الموردين": data?.payables,
+          "مشتريات اليوم": data?.purchases,
+          "مصروفات اليوم": data?.expenses,
+          "الرحلات النشطة": data?.active_trips,
+          "وحدات المخزون": data?.inventory_units,
+        } as Record<string, number | undefined>)[label] ?? base;
+        return <div className="card metric" key={label}>(([label,value,Icon,unit]) => <div className="card metric" key={String(label)}>
         <div className="metric-top"><span className="metric-label">{label}</span><span className="metric-icon"><Icon size={15}/></span></div>
         <div className="metric-value">{money(Number(value))}<span className="metric-unit">{unit}</span></div>
         <div className="metric-note">بيانات حقيقية من الـAPI</div>
-      </div>)}
+      </div>;
+      })}
     </section>
 
     <section className="section">
