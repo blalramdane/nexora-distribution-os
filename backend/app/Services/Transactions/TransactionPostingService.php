@@ -329,10 +329,16 @@ final class TransactionPostingService
                 throw ValidationException::withMessages(['trip_id'=>['This trip is already closed.']]);
             }
 
-            $movementRows = DB::table('stock_movements')
-                ->where('organization_id',$organizationId)->where('trip_id',$trip->id)
-                ->select('product_id', DB::raw("SUM(quantity_base) as expected_closing"))
-                ->groupBy('product_id')->get();
+            $productIds = DB::table('stock_movements')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->distinct()->pluck('product_id');
+            $movementRows = collect();
+            foreach ($productIds as $productId) {
+                $loaded = (string)DB::table('stock_movements')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->where('product_id',$productId)->where('movement_type','vehicle_load')->sum('quantity_base');
+                $sold = (string)DB::table('stock_movements')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->where('product_id',$productId)->where('movement_type','sale')->sum('quantity_base');
+                $returned = (string)DB::table('stock_movements')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->where('product_id',$productId)->where('movement_type','sales_return')->sum('quantity_base');
+                $transferred = (string)DB::table('stock_movements')->where('organization_id',$organizationId)->where('trip_id',$trip->id)->where('product_id',$productId)->whereIn('movement_type',['transfer_out','transfer_in'])->sum('quantity_base');
+                $expected = bcadd(bcadd($loaded,$sold,6),bcadd($returned,$transferred,6),6);
+                $movementRows->push((object)['product_id'=>$productId,'loaded'=>$loaded,'sold'=>$sold,'returned'=>$returned,'transferred'=>$transferred,'expected_closing'=>$expected]);
+            }
 
             $actual = collect($data['closing_items'] ?? [])->keyBy('product_id');
             $productIds = $movementRows->pluck('product_id')->merge($actual->keys())->unique()->values();
@@ -364,8 +370,8 @@ final class TransactionPostingService
                 $stockVarianceValue=bcadd($stockVarianceValue,bcmul($variance,$cost,4),4);
                 DB::table('trip_settlement_lines')->insert([
                     'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'trip_settlement_id'=>$settlementId,'product_id'=>$productId,
-                    'opening_quantity_base'=>0,'loaded_quantity_base'=>max(0,(float)($row->expected_closing ?? 0)),
-                    'sold_quantity_base'=>0,'returned_quantity_base'=>0,'transferred_quantity_base'=>0,'adjustment_quantity_base'=>0,
+                    'opening_quantity_base'=>0,'loaded_quantity_base'=>$row->loaded,
+                    'sold_quantity_base'=>abs((float)$row->sold),'returned_quantity_base'=>$row->returned,'transferred_quantity_base'=>$row->transferred,'adjustment_quantity_base'=>0,
                     'expected_closing_quantity_base'=>$expected,'actual_closing_quantity_base'=>$actualQty,'variance_quantity_base'=>$variance,
                     'created_at'=>now(),'updated_at'=>now(),
                 ]);
