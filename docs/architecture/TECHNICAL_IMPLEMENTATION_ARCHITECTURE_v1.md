@@ -566,3 +566,24 @@ Laravel 13/PHP 8.3+ is selected because it is the current supported Laravel majo
 - [x] Testing
 - [x] Security/observability
 - [x] No TASK-001 decision TODOs remain
+
+
+## 4.10 Product Packaging and Unit Conversion
+
+The schema and transaction implementation must support multiple commercial units for one product.
+
+Canonical model:
+- Product has a base stock unit.
+- Packaging definitions represent a higher unit such as carton/package.
+- Each packaging definition stores pieces-per-unit (conversion factor), unit label, optional barcode, and active/effective metadata.
+- Transaction lines snapshot entered unit, entered quantity, conversion factor, and normalized base quantity.
+- Stock movements store normalized base quantity.
+- Carton and piece barcodes can resolve to the same product while retaining the identified unit.
+- Historical transactions are immutable and keep their conversion snapshot even if packaging master data changes later.
+
+The minimum supported scenario is:
+**1 carton = N pieces; sale/purchase/return can be carton, piece, or mixed.**
+
+Example: 3 cartons + 4 pieces with a 50-piece carton posts 154 base pieces.
+
+The database specification in TASK-002 must define packaging tables, constraints, indexes, conversion precision, barcode uniqueness, historical snapshots, and migration/seed behavior.
