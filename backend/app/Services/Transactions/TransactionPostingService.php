@@ -312,14 +312,18 @@ final class TransactionPostingService
                 $newSourceQty=bcsub($available,$qty,6);
                 DB::table('stock_balances')->where('id',$sourceBalance->id)->update(['quantity_base'=>$newSourceQty,'updated_at'=>now()]);
 
-                $newVehicleQty=bcadd((string)($vehicleBalance->quantity_base ?? 0),$qty,6);
+                $oldVehicleQty=(string)($vehicleBalance->quantity_base ?? 0);
+                $newVehicleQty=bcadd($oldVehicleQty,$qty,6);
+                $oldVehicleCost=(string)($vehicleBalance->average_cost ?? '0.0000');
+                $vehicleValue=bcadd(bcmul($oldVehicleQty,$oldVehicleCost,4),bcmul($qty,$cost,4),4);
+                $vehicleAverage=bccomp($newVehicleQty,'0',6)===0?'0.0000':bcdiv($vehicleValue,$newVehicleQty,4);
                 if($vehicleBalance){
-                    DB::table('stock_balances')->where('id',$vehicleBalance->id)->update(['quantity_base'=>$newVehicleQty,'average_cost'=>$cost,'updated_at'=>now()]);
+                    DB::table('stock_balances')->where('id',$vehicleBalance->id)->update(['quantity_base'=>$newVehicleQty,'average_cost'=>$vehicleAverage,'updated_at'=>now()]);
                 }else{
                     DB::table('stock_balances')->insert([
                         'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'product_id'=>$product->id,
                         'location_id'=>$vehicle->location_id,'quantity_base'=>$newVehicleQty,'reserved_quantity_base'=>0,
-                        'average_cost'=>$cost,'updated_at'=>now(),
+                        'average_cost'=>$vehicleAverage,'updated_at'=>now(),
                     ]);
                 }
             }
@@ -406,7 +410,7 @@ final class TransactionPostingService
                 DB::table('trip_settlement_lines')->insert([
                     'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'trip_settlement_id'=>$settlementId,'product_id'=>$productId,
                     'opening_quantity_base'=>0,'loaded_quantity_base'=>$row->loaded,
-                    'sold_quantity_base'=>abs((float)$row->sold),'returned_quantity_base'=>$row->returned,'transferred_quantity_base'=>$row->transferred,'adjustment_quantity_base'=>0,
+                    'sold_quantity_base'=>bcsub('0',(string)$row->sold,6),'returned_quantity_base'=>$row->returned,'transferred_quantity_base'=>$row->transferred,'adjustment_quantity_base'=>0,
                     'expected_closing_quantity_base'=>$expected,'actual_closing_quantity_base'=>$actualQty,'variance_quantity_base'=>$variance,
                     'created_at'=>now(),'updated_at'=>now(),
                 ]);
@@ -509,6 +513,29 @@ final class TransactionPostingService
             $this->ledger($organizationId,$tx,$accounts['sales_returns'],$total,0,'sales_return',$returnId);
             $this->ledger($organizationId,$tx,$accounts['accounts_receivable'],0,$total,'sales_return',$returnId);
             $this->ledger($organizationId,$tx,$accounts['inventory'],$this->returnCost($items),0,'sales_return',$returnId);
+
+            if (!empty($data['original_sales_invoice_id'])) {
+                $invoice = DB::table('sales_invoices')
+                    ->where('organization_id',$organizationId)
+                    ->where('id',$data['original_sales_invoice_id'])
+                    ->lockForUpdate()
+                    ->first();
+                if (!$invoice || $invoice->customer_id !== $customer->id) {
+                    throw ValidationException::withMessages(['original_sales_invoice_id'=>['Original sales invoice is invalid.']]);
+                }
+                $returnedBefore = (string) DB::table('sales_returns')
+                    ->where('organization_id',$organizationId)
+                    ->where('original_sales_invoice_id',$invoice->id)
+                    ->where('status','posted')
+                    ->where('id','<>',$returnId)
+                    ->sum('total');
+                $remainingDue = bcsub(bcsub((string)$invoice->total,(string)$invoice->paid_amount,4),$returnedBefore,4);
+                $newBalanceDue = bcsub($remainingDue,$total,4);
+                DB::table('sales_invoices')->where('id',$invoice->id)->update([
+                    'balance_due'=>$newBalanceDue,
+                    'updated_at'=>now(),
+                ]);
+            }
             $this->ledger($organizationId,$tx,$accounts['cogs'],0,$this->returnCost($items),'sales_return',$returnId);
 
             DB::statement("INSERT INTO customer_balance_summaries (id,organization_id,customer_id,total_returns,outstanding,last_sale_at,updated_at) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_returns=total_returns+VALUES(total_returns), outstanding=outstanding-VALUES(total_returns), updated_at=VALUES(updated_at)", [
