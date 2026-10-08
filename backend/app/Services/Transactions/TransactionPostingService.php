@@ -513,6 +513,29 @@ final class TransactionPostingService
             $this->ledger($organizationId,$tx,$accounts['sales_returns'],$total,0,'sales_return',$returnId);
             $this->ledger($organizationId,$tx,$accounts['accounts_receivable'],0,$total,'sales_return',$returnId);
             $this->ledger($organizationId,$tx,$accounts['inventory'],$this->returnCost($items),0,'sales_return',$returnId);
+
+            if (!empty($data['original_sales_invoice_id'])) {
+                $invoice = DB::table('sales_invoices')
+                    ->where('organization_id',$organizationId)
+                    ->where('id',$data['original_sales_invoice_id'])
+                    ->lockForUpdate()
+                    ->first();
+                if (!$invoice || $invoice->customer_id !== $customer->id) {
+                    throw ValidationException::withMessages(['original_sales_invoice_id'=>['Original sales invoice is invalid.']]);
+                }
+                $returnedBefore = (string) DB::table('sales_returns')
+                    ->where('organization_id',$organizationId)
+                    ->where('original_sales_invoice_id',$invoice->id)
+                    ->where('status','posted')
+                    ->where('id','<>',$returnId)
+                    ->sum('total');
+                $remainingDue = bcsub(bcsub((string)$invoice->total,(string)$invoice->paid_amount,4),$returnedBefore,4);
+                $newBalanceDue = bcsub($remainingDue,$total,4);
+                DB::table('sales_invoices')->where('id',$invoice->id)->update([
+                    'balance_due'=>$newBalanceDue,
+                    'updated_at'=>now(),
+                ]);
+            }
             $this->ledger($organizationId,$tx,$accounts['cogs'],0,$this->returnCost($items),'sales_return',$returnId);
 
             DB::statement("INSERT INTO customer_balance_summaries (id,organization_id,customer_id,total_returns,outstanding,last_sale_at,updated_at) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_returns=total_returns+VALUES(total_returns), outstanding=outstanding-VALUES(total_returns), updated_at=VALUES(updated_at)", [
