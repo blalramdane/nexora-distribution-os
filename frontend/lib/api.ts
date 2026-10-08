@@ -9,7 +9,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
   const response = await fetch(`${API_URL}${path}`, { ...options, headers });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload?.message || "حدث خطأ أثناء الاتصال بالنظام.");
+  if (!response.ok) {\n    const validation = payload?.errors && typeof payload.errors === "object"\n      ? Object.values(payload.errors).flat().join(" | ")\n      : "";\n    throw new Error(validation || payload?.message || `فشل الطلب (${response.status})`);\n  }
   return payload as T;
 }
 
