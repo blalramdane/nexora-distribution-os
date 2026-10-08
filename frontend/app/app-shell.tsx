@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 
-const nav = [
+const nav: Array<[string, string, LucideIcon]> = [
   ["الرئيسية","/",LayoutDashboard],
   ["المبيعات","/sales",CircleDollarSign],
   ["العملاء","/customers",Users],
