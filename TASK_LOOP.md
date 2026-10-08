@@ -427,6 +427,45 @@ TASK-003 — Laravel Backend Foundation + Database Migrations + Schema Tests.
 
 ---
 
+## ACTIVE TASK — TASK-003
+
+### Title
+Laravel Backend Foundation + Database Migrations + Schema Tests
+
+### Priority
+P0 — PHASE 1 FOUNDATION
+
+### Objective
+Create the first production backend foundation from the locked architecture and database contract.
+
+### Deliverables
+- Laravel 13 / PHP 8.3+ application under backend/
+- Environment/configuration foundation
+- Organization/tenant model and server-side tenant scope
+- Authentication/session foundation
+- RBAC foundation
+- Database migrations in the exact order defined by DATABASE_SCHEMA_SPEC_v1.md
+- Repeatable reference-data seeders
+- Packaging/carton/piece schema
+- Inventory/ledger foundation tables
+- Idempotency storage
+- Audit storage
+- Sync/outbox foundation tables
+- Schema-level tests for the critical constraints listed in DATABASE_SCHEMA_SPEC_v1.md
+- Basic CI validation for backend install, migration and tests
+
+### Non-negotiables
+- Do not bypass the transaction engine contract.
+- Do not implement business features as controller logic.
+- Do not mutate stock balances directly.
+- Preserve tenant isolation.
+- Preserve packaging conversion snapshots.
+- No hard-delete model for posted transaction records.
+- Tests must prove critical database constraints.
+
+### Acceptance
+TASK-003 is complete only when the backend installs reproducibly, migrations run cleanly from an empty database, seeders are repeatable, schema tests pass, and the repository contains evidence of the test/build result.
+
 # 5. Task Completion Protocol
 ---
 
