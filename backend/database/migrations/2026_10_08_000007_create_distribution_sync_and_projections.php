@@ -26,12 +26,14 @@ return new class extends Migration
             $table->index(['organization_id', 'trip_date', 'vehicle_id'], 'trips_date_vehicle_idx');
         });
 
-        DB::statement('ALTER TABLE stock_movements ADD CONSTRAINT stock_movements_trip_id_fk FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL');
-        DB::statement('ALTER TABLE sales_invoices ADD CONSTRAINT sales_invoices_trip_id_fk FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL');
-        DB::statement('ALTER TABLE sales_returns ADD CONSTRAINT sales_returns_trip_id_fk FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL');
-        DB::statement('ALTER TABLE payments ADD CONSTRAINT payments_trip_id_fk FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL');
-        DB::statement('ALTER TABLE expenses ADD CONSTRAINT expenses_trip_id_fk FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL');
-        DB::statement('ALTER TABLE expenses ADD CONSTRAINT expenses_vehicle_id_fk FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL');
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement('ALTER TABLE stock_movements ADD CONSTRAINT stock_movements_trip_id_fk FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL');
+            DB::statement('ALTER TABLE sales_invoices ADD CONSTRAINT sales_invoices_trip_id_fk FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL');
+            DB::statement('ALTER TABLE sales_returns ADD CONSTRAINT sales_returns_trip_id_fk FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL');
+            DB::statement('ALTER TABLE payments ADD CONSTRAINT payments_trip_id_fk FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL');
+            DB::statement('ALTER TABLE expenses ADD CONSTRAINT expenses_trip_id_fk FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL');
+            DB::statement('ALTER TABLE expenses ADD CONSTRAINT expenses_vehicle_id_fk FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL');
+        }
 
         Schema::create('trip_customers', function (Blueprint $table): void {
             $table->ulid('id')->primary();
@@ -244,7 +246,9 @@ return new class extends Migration
             $table->unique(['organization_id', 'business_date']);
         });
 
-        DB::statement("ALTER TABLE trip_load_items ADD CONSTRAINT chk_trip_load_item_qty CHECK (quantity_base > 0)");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE trip_load_items ADD CONSTRAINT chk_trip_load_item_qty CHECK (quantity_base > 0)");
+        }
     }
 
     public function down(): void
@@ -268,12 +272,14 @@ return new class extends Migration
             Schema::dropIfExists($table);
         }
 
-        DB::statement('ALTER TABLE expenses DROP FOREIGN KEY expenses_trip_id_fk');
-        DB::statement('ALTER TABLE expenses DROP FOREIGN KEY expenses_vehicle_id_fk');
-        DB::statement('ALTER TABLE payments DROP FOREIGN KEY payments_trip_id_fk');
-        DB::statement('ALTER TABLE sales_returns DROP FOREIGN KEY sales_returns_trip_id_fk');
-        DB::statement('ALTER TABLE sales_invoices DROP FOREIGN KEY sales_invoices_trip_id_fk');
-        DB::statement('ALTER TABLE stock_movements DROP FOREIGN KEY stock_movements_trip_id_fk');
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement('ALTER TABLE expenses DROP FOREIGN KEY expenses_trip_id_fk');
+            DB::statement('ALTER TABLE expenses DROP FOREIGN KEY expenses_vehicle_id_fk');
+            DB::statement('ALTER TABLE payments DROP FOREIGN KEY payments_trip_id_fk');
+            DB::statement('ALTER TABLE sales_returns DROP FOREIGN KEY sales_returns_trip_id_fk');
+            DB::statement('ALTER TABLE sales_invoices DROP FOREIGN KEY sales_invoices_trip_id_fk');
+            DB::statement('ALTER TABLE stock_movements DROP FOREIGN KEY stock_movements_trip_id_fk');
+        }
         Schema::dropIfExists('trips');
     }
 };
