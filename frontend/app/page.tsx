@@ -52,7 +52,7 @@ export default function Home(){
     <div className="hero-flow">{["المخزن","العربية","الرحلة","العميل","البيع","التحصيل"].map((x,i)=><div key={x} style={{display:"flex",alignItems:"center",gap:7}}><span className="flow-pill">{x}</span>{i<5&&<ArrowLeft size={12} className="flow-arrow"/>}</div>)}</div>
    </section>
    <section className="grid">
-    {[
+    {([
       ["مبيعات اليوم",data?.sales??0,CircleDollarSign,"EGP","نشاط اليوم"],
       ["تحصيلات اليوم",data?.collections??0,WalletCards,"EGP","تم التحصيل"],
       ["مستحقات العملاء",data?.receivables??0,Users,"EGP","ذمم مدينة"],
