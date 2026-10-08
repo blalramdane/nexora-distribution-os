@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\PurchaseController;
 use App\Http\Controllers\Api\V1\SalesController;
 use App\Http\Controllers\Api\V1\PaymentController;
 use App\Http\Controllers\Api\V1\ReturnController;
+use App\Http\Controllers\Api\V1\TripLoadController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/v1/health', static fn () => response()->json([
@@ -33,5 +34,6 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/payments', [PaymentController::class, 'store']);
     Route::post('/returns/sales', [ReturnController::class, 'sales']);
     Route::post('/returns/purchases', [ReturnController::class, 'purchases']);
+    Route::post('/trip-loads', [TripLoadController::class, 'store']);
     });
 });
