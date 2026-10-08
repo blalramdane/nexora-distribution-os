@@ -17,7 +17,7 @@
 - A security hardening change was added to PR #8 so `DemoOrganizationSeeder` only runs in `local/testing` and cannot create demo credentials during production seeding.
 
 ### Current Blockers
-- [ ] New CI evidence for PR #8 after the latest seeder hardening commit.
+- [x] New CI evidence for PR #8 after the latest seeder hardening commit: Backend run **37821574049** SUCCESS; Frontend run **37821574036** SUCCESS.
 - [ ] Fresh migration/seed/re-seed/rollback runtime verification against MySQL 8.4.
 - [ ] Full backend test suite verification after PR #7 merge.
 - [ ] Accounting reconciliation gate.
@@ -25,12 +25,12 @@
 
 ### Decision
 - **PR #7: SAFE TO MERGE — MERGED.**
-- **PR #8: NOT MERGED YET.** Wait for fresh CI evidence after the seeder hardening change, then perform the local CRUD/business-flow verification before merge.
+- **PR #8: NOT MERGED YET.** Fresh CI is green. PR #8 still needs a clean branch integration onto the current `main` because its head diverged from the post-PR#7 main history; do not force-merge.
 
 ### Next Execution
-1. Verify PR #8 fresh CI.
+1. Integrate the PR #8 feature snapshot cleanly onto current `main` without force-merging divergent history.
 2. Run/verify database lifecycle gate.
-3. Run full backend tests.
+3. Run full backend tests on the resulting mainline.
 4. Verify transaction/accounting invariants.
 5. Continue to Security/Tenant Isolation.
 
