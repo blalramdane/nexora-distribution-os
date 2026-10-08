@@ -315,7 +315,7 @@ final class TransactionPostingService
             ]);
 
             $result=['id'=>$loadId,'load_number'=>$loadNumber,'trip_id'=>$trip->id,'vehicle_id'=>$vehicle->id,'status'=>'loaded'];
-            $this->completeIdempotency($organizationId,'trip_load.post',$data['idempotency_key'] ?? null,'trip_load:'.$loadId);
+            $this->completeIdempotency($organizationId,'trip_load.post',$data['idempotency_key'] ?? null,'trip_load:'.$loadId.':'.$loadNumber);
             return $result;
         }, attempts:5);
     }
@@ -772,16 +772,11 @@ final class TransactionPostingService
 
     private function replayTripLoad(string $organizationId, string $reference): array
     {
-        [$type,$id]=array_pad(explode(':',$reference,2),2,null);
-        if($type !== 'trip_load' || !$id) throw ValidationException::withMessages(['idempotency_key'=>['Stored trip load response is invalid.']]);
+        [$type,$id,$loadNumber]=array_pad(explode(':',$reference,3),3,null);
+        if($type !== 'trip_load' || !$id || !$loadNumber) throw ValidationException::withMessages(['idempotency_key'=>['Stored trip load response is invalid.']]);
         $load=DB::table('trip_loads')->where('organization_id',$organizationId)->where('id',$id)->first();
         if(!$load) throw ValidationException::withMessages(['idempotency_key'=>['Stored trip load response could not be replayed.']]);
-        return ['id'=>$load->id,'load_number'=>$this->loadNumber($load),'trip_id'=>$load->trip_id,'vehicle_id'=>$load->to_vehicle_id,'status'=>$load->status];
-    }
-
-    private function loadNumber(object $load): string
-    {
-        return DB::table('document_sequences')->where('organization_id',$load->organization_id)->where('document_type','trip_load')->value('prefix') ? (string)$load->id : (string)$load->id;
+        return ['id'=>$load->id,'load_number'=>$loadNumber,'trip_id'=>$load->trip_id,'vehicle_id'=>$load->to_vehicle_id,'status'=>$load->status];
     }
 
     private function replayReturn(string $organizationId, string $reference, string $type): array
