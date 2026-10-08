@@ -1,0 +1,6 @@
+"use client";
+import { useEffect,useState } from "react";
+import { BarChart3 } from "lucide-react";
+import { api } from "@/lib/api";
+type D={sales:number;purchases:number;collections:number;expenses:number;receivables:number;payables:number;active_trips:number;inventory_units:number;inventory_value:number};
+export default function Reports(){const[d,setD]=useState<D|null>(null);useEffect(()=>{api<D>("/dashboard").then(setD)},[]);const cards=d?[["مبيعات اليوم",d.sales],["مشتريات اليوم",d.purchases],["تحصيلات اليوم",d.collections],["مصروفات اليوم",d.expenses],["مستحقات العملاء",d.receivables],["مستحقات الموردين",d.payables],["قيمة المخزون",d.inventory_value]]:[];return <main className="main"><div className="topbar"><div><h1 className="title">التقارير</h1><div className="subtitle">Live operational snapshot</div></div><BarChart3 size={20}/></div><div className="grid">{cards.map(([label,value])=><div className="card metric" key={label as string}><span className="metric-label">{label}</span><strong className="metric-value">{Number(value).toLocaleString("ar-EG")} <small>EGP</small></strong></div>)}</div></main>}
