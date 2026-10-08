@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class SchemaFoundationTest extends TestCase
@@ -32,8 +33,10 @@ class SchemaFoundationTest extends TestCase
 
     public function test_organization_tenant_key_is_required_on_users(): void
     {
-        $organization = DB::table('organizations')->insertGetId([
-            'id' => (string) Illuminate\Support\Str::ulid(),
+        $organizationId = (string) Str::ulid();
+
+        DB::table('organizations')->insert([
+            'id' => $organizationId,
             'name' => 'NEXORA Test',
             'default_currency' => 'EGP',
             'timezone' => 'Africa/Cairo',
@@ -43,7 +46,7 @@ class SchemaFoundationTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->assertNotNull($organization);
+        $this->assertDatabaseHas('organizations', ['id' => $organizationId]);
         $this->assertTrue(DB::getSchemaBuilder()->hasColumn('users', 'organization_id'));
     }
 }
