@@ -78,3 +78,11 @@ For products with packaging:
 Fast-sale UX should never force the user to manually calculate pieces inside the carton. The system performs the conversion and shows the resulting base quantity before posting.
 
 Purchase grid must support supplier invoices entered by carton or piece without opening a separate product form for each row.
+
+
+## Visual Reference Lock
+
+The functional UX defined here must be implemented using the approved visual baseline:
+`docs/design/UI_UX_VISUAL_BASELINE_v1.md`
+
+The visual baseline is locked for NEXORA Distribution OS. Future screens must preserve its RTL direction, B2B SaaS density, navigation language, semantic colors, packaging visibility, and component behavior unless a deliberate design change is approved.
