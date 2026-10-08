@@ -36,7 +36,7 @@ if (-not (Test-Path (Join-Path $PhpDir "php.ini"))) {
 if (Test-Path (Join-Path $PhpDir "php.ini")) {
     $ini = Get-Content (Join-Path $PhpDir "php.ini") -Raw
     $ini = $ini -replace '(?m)^;?extension_dir\s*=.*$', 'extension_dir = "ext"'
-    foreach ($ext in @("curl","fileinfo","mbstring","openssl","pdo_mysql","bcmath","intl","zip")) {
+    foreach ($ext in @("curl","fileinfo","mbstring","openssl","pdo_mysql","pdo_sqlite","sqlite3","bcmath","intl","zip")) {
         $ini = $ini -replace "(?m)^;extension=$ext\s*$", "extension=$ext"
     }
     Set-Content (Join-Path $PhpDir "php.ini") $ini -Encoding UTF8
