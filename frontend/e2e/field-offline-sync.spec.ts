@@ -17,7 +17,7 @@ async function syncOperationStatus(page: import("@playwright/test").Page) {
 }
 
 test("field visit queues offline and is acknowledged after reconnect", async ({ page, context }) => {
-  await page.route("**/api/v1/field/today", async (route) => {
+  await page.route("**/field/today", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -71,7 +71,7 @@ test("field visit queues offline and is acknowledged after reconnect", async ({ 
 
   expect(queued.operationUuid).toBeTruthy();
 
-  await page.route("**/api/v1/sync/operations", async (route) => {
+  await page.route("**/sync/operations", async (route) => {
     const request = route.request();
     const body = request.postDataJSON();
     expect(request.headers()["x-device-uuid"]).toBeTruthy();
@@ -94,7 +94,7 @@ test("field visit queues offline and is acknowledged after reconnect", async ({ 
     });
   });
 
-  const syncRequest = page.waitForRequest("**/api/v1/sync/operations", { timeout: 10_000 });
+  const syncRequest = page.waitForRequest("**/sync/operations", { timeout: 10_000 });
   await context.setOffline(false);
   await page.evaluate(() => { Object.defineProperty(navigator, "onLine", { configurable: true, value: true }); window.dispatchEvent(new Event("online")); });
   await expect(page.locator(".connection")).toContainText("متصل");
