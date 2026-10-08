@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowLeft, BarChart3, CircleDollarSign, ClipboardList, Package, Truck, Users, WalletCards } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { api } from "@/lib/api";
 
 type Dashboard = {
@@ -11,7 +12,7 @@ type Dashboard = {
   inventory_units:number; inventory_value:number; today:string;
 };
 
-const quick = [
+const quick: Array<[string, string, LucideIcon, string]> = [
   ["بيع سريع","/sales",CircleDollarSign,"بيع وتحصيل في نفس المسار"],
   ["إضافة منتج","/products",Package,"SKU + تكلفة + سعر بيع"],
   ["عميل جديد","/customers",Users,"إنشاء تاجر/عميل في ثواني"],
