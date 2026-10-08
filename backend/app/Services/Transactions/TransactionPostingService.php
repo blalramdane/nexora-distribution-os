@@ -132,6 +132,10 @@ final class TransactionPostingService
             $this->ledger($organizationId,$tx,$accounts['inventory'],$costOfInventory,0,'purchase_invoice',$invoiceId);
             $this->ledger($organizationId,$tx,$accounts['accounts_payable'],0,$total,'purchase_invoice',$invoiceId);
 
+            DB::statement("INSERT INTO supplier_balance_summaries (id,organization_id,supplier_id,total_purchases,outstanding,last_purchase_at,updated_at) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_purchases=total_purchases+VALUES(total_purchases), outstanding=outstanding+VALUES(total_purchases), last_purchase_at=VALUES(last_purchase_at), updated_at=VALUES(updated_at)", [
+                (string)Str::ulid(), $organizationId, $supplier->id, $total, $total, now(), now()
+            ]);
+
             $result = ['id'=>$invoiceId,'document_number'=>$documentNumber,'total'=>$total,'status'=>'posted'];
             $this->completeIdempotency($organizationId, 'purchase.post', $data['idempotency_key'] ?? null, 'purchase_invoice:'.$invoiceId);
             return $result;
@@ -234,6 +238,10 @@ final class TransactionPostingService
                 $this->ledger($organizationId,$tx,$accounts['cogs'],$cogs,0,'sales_invoice',$invoiceId);
                 $this->ledger($organizationId,$tx,$accounts['inventory'],0,$cogs,'sales_invoice',$invoiceId);
             }
+
+            DB::statement("INSERT INTO customer_balance_summaries (id,organization_id,customer_id,total_sales,total_paid,outstanding,last_sale_at,updated_at) VALUES (?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE total_sales=total_sales+VALUES(total_sales), total_paid=total_paid+VALUES(total_paid), outstanding=outstanding+VALUES(outstanding), last_sale_at=VALUES(last_sale_at), updated_at=VALUES(updated_at)", [
+                (string)Str::ulid(), $organizationId, $customer->id, $total, $paid, $balanceDue, now(), now()
+            ]);
 
             $result = ['id'=>$invoiceId,'document_number'=>$documentNumber,'total'=>$total,'paid_amount'=>$paid,'balance_due'=>$balanceDue,'status'=>'posted'];
             $this->completeIdempotency($organizationId, 'sale.post', $data['idempotency_key'] ?? null, 'sales_invoice:'.$invoiceId);
