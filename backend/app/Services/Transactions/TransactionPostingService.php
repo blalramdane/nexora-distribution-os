@@ -75,7 +75,7 @@ final class TransactionPostingService
                 DB::table('purchase_invoice_items')->insert([
                     'id'=>(string) Str::ulid(),'organization_id'=>$organizationId,
                     'purchase_invoice_id'=>$invoiceId,'product_id'=>$item['product']->id,
-                    'packaging_id'=>$data['packaging_id'] ?? null,'entered_unit_id'=>$data['unit_id'] ?? $item['product']->base_unit_id,
+                    'packaging_id'=>$data['items'][array_search($item['product']->id, array_column($data['items'], 'product_id'))]['packaging_id'] ?? null,'entered_unit_id'=>$data['items'][array_search($item['product']->id, array_column($data['items'], 'product_id'))]['unit_id'] ?? $item['product']->base_unit_id,
                     'entered_quantity'=>$item['enteredQty'],'conversion_factor_snapshot'=>$item['conversion'],
                     'quantity_base'=>$item['quantityBase'],'unit_cost_entered'=>$item['unitCost'],
                     'unit_cost_base'=>bcdiv($item['unitCost'],$item['conversion'],4),
@@ -192,8 +192,8 @@ final class TransactionPostingService
             foreach($items as $item){
                 DB::table('sales_invoice_items')->insert([
                     'id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'sales_invoice_id'=>$invoiceId,
-                    'product_id'=>$item['product']->id,'packaging_id'=>$data['packaging_id'] ?? null,
-                    'entered_unit_id'=>$data['unit_id'] ?? $item['product']->base_unit_id,'entered_quantity'=>$item['enteredQty'],
+                    'product_id'=>$item['product']->id,'packaging_id'=>$data['items'][array_search($item['product']->id, array_column($data['items'], 'product_id'))]['packaging_id'] ?? null,
+                    'entered_unit_id'=>$data['items'][array_search($item['product']->id, array_column($data['items'], 'product_id'))]['unit_id'] ?? $item['product']->base_unit_id,'entered_quantity'=>$item['enteredQty'],
                     'conversion_factor_snapshot'=>$item['conversion'],'quantity_base'=>$item['quantityBase'],
                     'unit_price_entered'=>$item['unitPrice'],'unit_price_base'=>bcdiv($item['unitPrice'],$item['conversion'],4),
                     'discount'=>0,'tax'=>0,'line_total'=>$item['lineTotal'],'unit_cost_snapshot'=>$item['cost'],
