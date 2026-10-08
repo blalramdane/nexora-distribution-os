@@ -426,6 +426,17 @@ TASK-002 must define the exact database schema, migration order, constraints, in
 ### Next task
 TASK-002 — Database Schema & Migration Specification.
 
+### TASK-002 additional mandatory requirement
+The schema specification must model real distribution packaging:
+- canonical base stock unit
+- carton/package units
+- pieces-per-carton conversion
+- carton and piece barcodes
+- carton/piece/mixed purchase, sale and return quantities
+- transaction-line conversion snapshots
+- base-unit inventory movements and costing
+- historical immutability when packaging definitions change
+
 ---
 
 # 5. Task Completion Protocol
