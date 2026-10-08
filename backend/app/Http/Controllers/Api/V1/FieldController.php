@@ -7,7 +7,7 @@ use Illuminate\Support\Str;
 class FieldController extends Controller{
  public function today(Request $request){
   $org=$request->user()->organization_id;$uid=$request->user()->id;$date=now()->toDateString();
-  $trip=DB::table('trips as t')->join('vehicles as v','v.id','=','t.vehicle_id')->where('t.organization_id',$org)->where('t.rep_user_id',$uid)->whereDate('t.trip_date',$date)->whereNotIn('t.status',['completed','cancelled'])->select('t.*','v.name as vehicle_name','v.code as vehicle_code')->orderByDesc('t.created_at')->first();
+  $trip=DB::table('trips as t')->join('vehicles as v','v.id','=','t.vehicle_id')->where('t.organization_id',$org)->where('t.rep_user_id',$uid)->whereDate('t.trip_date',$date)->whereNotIn('t.status',['completed','cancelled'])->select('t.*','v.name as vehicle_name','v.code as vehicle_code','v.location_id as vehicle_location_id')->orderByDesc('t.created_at')->first();
   if(!$trip)return response()->json(['trip'=>null,'customers'=>[],'stock'=>[]]);
   $customers=DB::table('trip_customers as tc')->join('customers as c','c.id','=','tc.customer_id')->leftJoin('customer_addresses as ca',function($j){$j->on('ca.customer_id','=','c.id')->where('ca.is_primary',true)->where('ca.active',true);})
    ->where('tc.organization_id',$org)->where('tc.trip_id',$trip->id)->select('tc.id as assignment_id','tc.sequence','tc.visit_status','c.id','c.code','c.name','c.phone','c.address_text','ca.latitude','ca.longitude')->orderBy('tc.sequence')->get();
