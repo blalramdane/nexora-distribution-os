@@ -1,0 +1,6 @@
+"use client";
+import { useEffect,useState } from "react";
+import { Search, Users } from "lucide-react";
+import { api } from "@/lib/api";
+type Supplier={id:string;name:string;code:string;phone?:string;status:string};
+export default function Suppliers(){const[rows,setRows]=useState<Supplier[]>([]),[q,setQ]=useState("");useEffect(()=>{api<Supplier[]>("/suppliers?q="+encodeURIComponent(q)).then(setRows).catch(()=>{})},[q]);return <main className="main"><div className="topbar"><div><h1 className="title">الموردين</h1><div className="subtitle">Suppliers — المصدر والحسابات الدائنة</div></div><span className="badge blue"><Users size={11}/> {rows.length} مورد</span></div><div className="card" style={{marginBottom:12,display:"flex",gap:8}}><Search size={15}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="ابحث بالاسم أو الكود أو الهاتف..." style={{border:0,outline:0,flex:1}}/></div><div className="table-wrap"><table><thead><tr><th>المورد</th><th>الكود</th><th>الهاتف</th><th>الحالة</th></tr></thead><tbody>{rows.map(s=><tr key={s.id}><td><strong>{s.name}</strong></td><td>{s.code}</td><td>{s.phone||"—"}</td><td><span className="badge green">نشط</span></td></tr>)}</tbody></table></div></main>}

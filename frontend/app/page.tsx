@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft, BarChart3, Bell, Box, CarFront, CircleDollarSign, ClipboardList,
@@ -8,12 +9,12 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 
-type Dashboard={sales:number;purchases:number;collections:number;expenses:number;receivables:number;payables:number;today:string};
+type Dashboard={sales:number;purchases:number;collections:number;expenses:number;receivables:number;payables:number;active_trips:number;inventory_units:number;inventory_value:number;today:string};
 
 const nav=[
-  ["الرئيسية",LayoutDashboard],["المبيعات",CircleDollarSign],["العملاء",Users],["المشتريات",ClipboardList],
-  ["المخزون",Package],["المستودعات",Warehouse],["السيارات والتوزيع",Truck],["الموردين",Users],
-  ["التحصيلات",WalletCards],["المرتجعات",FileText],["المصروفات",CircleDollarSign],["التقارير",BarChart3]
+  ["الرئيسية","/",LayoutDashboard],["المبيعات","/sales",CircleDollarSign],["العملاء","/customers",Users],["المشتريات","/purchases",ClipboardList],
+  ["المخزون","/inventory",Package],["المستودعات","/locations",Warehouse],["السيارات والتوزيع","/trips",Truck],["الموردين","/suppliers",Users],
+  ["التحصيلات","/payments",WalletCards],["المرتجعات","/returns",FileText],["التقارير","/reports",BarChart3]
 ] as const;
 
 const quick=[
@@ -33,7 +34,7 @@ export default function Home(){
    <div className="brand"><div className="brand-mark">N</div><div className="brand-name">NEXORA<small>Distribution OS</small></div></div>
    <nav className="nav">
     <div className="nav-section">إدارة التشغيل</div>
-    {nav.map(([label,Icon],i)=><button key={label} className={i===0?"active":""}><Icon size={16}/><span>{label}</span></button>)}
+    {nav.map(([label,href,Icon],i)=><Link key={label} href={href} className={"nav-link "+(i===0?"active":"")}><Icon size={16}/><span>{label}</span></Link>)}
     <div className="nav-section">النظام</div><button><Settings size={16}/><span>الإعدادات</span></button>
    </nav>
    <div className="sidebar-bottom">
@@ -59,8 +60,8 @@ export default function Home(){
       ["مستحقات الموردين",data?.payables??0,Warehouse,"EGP","ذمم دائنة"],
       ["مشتريات اليوم",data?.purchases??0,ClipboardList,"EGP","وارد اليوم"],
       ["مصروفات اليوم",data?.expenses??0,WalletCards,"EGP","تشغيل"],
-      ["الرحلات النشطة",0,Truck,"رحلة","اليوم"],
-      ["المخزون",0,Box,"قطعة","آخر مزامنة"],
+      ["الرحلات النشطة",data?.active_trips??0,Truck,"رحلة","اليوم"],
+      ["المخزون",data?.inventory_units??0,Box,"قطعة","إجمالي الوحدات"],
     ] as [string,number,import("lucide-react").LucideIcon,string,string][]).map(([label,value,Icon,unit,note])=><div className="card metric" key={String(label)}><div className="metric-top"><span className="metric-label">{label}</span><span className="metric-icon"><Icon size={15}/></span></div><div className="metric-value">{typeof value==="number"?money(value):value}<span className="metric-unit">{unit}</span></div><div className="metric-note">{note}</div></div>)}
    </section>
    <section className="section"><div className="section-head"><h2>إجراءات سريعة</h2><span className="section-link">Minimum Input → Maximum Result</span></div>

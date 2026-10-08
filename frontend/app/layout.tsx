@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import SyncBootstrap from "./sync-bootstrap";
 
 export const metadata: Metadata = {
   title: "NEXORA Distribution OS",
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ar" dir="rtl">
-      <body>{children}</body>
+      <body><SyncBootstrap />{children}</body>
     </html>
   );
 }
