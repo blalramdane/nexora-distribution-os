@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\InventoryController;
+use App\Http\Controllers\Api\V1\LocationController;
 use App\Http\Controllers\Api\V1\PurchaseController;
 use App\Http\Controllers\Api\V1\SalesController;
 use App\Http\Controllers\Api\V1\PaymentController;
@@ -29,6 +30,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/customers', [CustomerController::class, 'index']);
         Route::post('/customers', [CustomerController::class, 'store']);
         Route::get('/inventory', [InventoryController::class, 'index']);
+        Route::get('/locations', [LocationController::class, 'index']);
         Route::post('/purchases', [PurchaseController::class, 'store']);
         Route::post('/sales', [SalesController::class, 'store']);
     Route::post('/payments', [PaymentController::class, 'store']);
