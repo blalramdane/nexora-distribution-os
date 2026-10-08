@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -244,6 +245,14 @@ return new class extends Migration
             $table->check('amount > 0');
         });
     }
+
+        DB::statement("ALTER TABLE purchase_invoice_items ADD CONSTRAINT chk_purchase_item_qty CHECK (entered_quantity > 0 AND conversion_factor_snapshot > 0 AND quantity_base > 0)");
+        DB::statement("ALTER TABLE purchase_return_items ADD CONSTRAINT chk_purchase_return_item_qty CHECK (entered_quantity > 0 AND conversion_factor_snapshot > 0 AND quantity_base > 0)");
+        DB::statement("ALTER TABLE sales_invoice_items ADD CONSTRAINT chk_sales_item_qty CHECK (entered_quantity > 0 AND conversion_factor_snapshot > 0 AND quantity_base > 0)");
+        DB::statement("ALTER TABLE sales_return_items ADD CONSTRAINT chk_sales_return_item_qty CHECK (entered_quantity > 0 AND conversion_factor_snapshot > 0 AND quantity_base > 0)");
+        DB::statement("ALTER TABLE payments ADD CONSTRAINT chk_payment_amount_positive CHECK (amount > 0)");
+        DB::statement("ALTER TABLE payment_allocations ADD CONSTRAINT chk_payment_allocation_positive CHECK (amount > 0)");
+        DB::statement("ALTER TABLE expenses ADD CONSTRAINT chk_expense_amount_positive CHECK (amount > 0)");
 
     public function down(): void
     {
