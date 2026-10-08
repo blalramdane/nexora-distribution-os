@@ -3,7 +3,8 @@ import { useEffect,useState } from "react";
 import { Search, Plus, Trash2, ScanBarcode, CircleDollarSign } from "lucide-react";
 import { api } from "@/lib/api";
 type Product={id:string;sku:string;name_ar:string;default_piece_price:number;default_cost:number};
-type Customer={id:string;code:string;name:string;phone?:string};\ntype Location={id:string;name:string;code:string};
+type Customer={id:string;code:string;name:string;phone?:string};
+type Location={id:string;name:string;code:string};
 type Line={product:Product;quantity:number;unit_price:number};
 export default function Sales(){
  const [customers,setCustomers]=useState<Customer[]>([]),[products,setProducts]=useState<Product[]>([]),[locations,setLocations]=useState<Location[]>([]),[customer,setCustomer]=useState<Customer|null>(null),[location,setLocation]=useState<Location|null>(null),[lines,setLines]=useState<Line[]>([]),[q,setQ]=useState(""),[message,setMessage]=useState("");
