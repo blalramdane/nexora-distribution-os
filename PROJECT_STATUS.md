@@ -1,7 +1,7 @@
 # Project Status — NEXORA Distribution OS
 
 ## Current phase
-Phase 0 — Architecture Foundation complete; preparing TASK-002 Database Schema & Migration Specification.
+Phase 1 — Backend Foundation / Database Implementation.
 
 ## Completed
 - Product vision and positioning
@@ -18,8 +18,10 @@ Phase 0 — Architecture Foundation complete; preparing TASK-002 Database Schema
 - UX architecture
 - MVP boundaries
 - Technical implementation architecture v1
-- ADR set: modular monolith, transaction ledger, offline sync, vehicle-as-location, transactional outbox
-- Backend/admin/field/infrastructure/testing contracts
+- ADR set
+- UI/UX Visual Baseline v1 — locked
+- Product packaging model: carton/piece/mixed quantities
+- Database Schema & Migration Specification v1
 
 ## Not implemented
 - Laravel application
@@ -35,18 +37,6 @@ Phase 0 — Architecture Foundation complete; preparing TASK-002 Database Schema
 - WhatsApp integration
 - Map provider integration
 
-## Remaining P0 decisions / specifications
-- Database specification and migration order
-- Detailed API contract and error catalog
-- Detailed sync protocol
-- Costing policy approval
-- Tax/VAT rules and invoice requirements
-- Document numbering
-- Negative-stock policy confirmation
-- Adjustment/approval thresholds
-- Credit-limit policy
-- Real workflow validation with representative data
-
 ## Architecture locks
 - Laravel 13 / PHP 8.3+
 - MySQL 8.4 LTS
@@ -54,12 +44,25 @@ Phase 0 — Architecture Foundation complete; preparing TASK-002 Database Schema
 - Transaction/ledger source of truth
 - Vehicle as first-class stock Location
 - Operation-based offline sync
-- Transactional outbox for external side effects
-- React + TypeScript + Vite for Admin Web
-- React + TypeScript PWA for Field
+- Transactional outbox
+- React + TypeScript + Vite Admin
+- React + TypeScript Field PWA
+- Locked UI/UX Visual Baseline
+- Base-unit inventory with carton/piece packaging conversions
+
+## Remaining P0 business policy decisions
+- Tax/VAT rules and invoice requirements
+- Final costing policy approval
+- Document numbering policy details
+- Negative-stock policy confirmation
+- Adjustment/approval thresholds
+- Credit-limit enforcement policy
+- Real workflow validation with representative data
+
+These must be represented explicitly in implementation/configuration and must not be guessed.
 
 ## Important
 The old system is currently unavailable. Do not block development on it. Later, create a migration adapter and reconcile opening balances, inventory and historical transactions.
 
 ## Next active task
-TASK-002 — Database Schema & Migration Specification.
+TASK-003 — Laravel Backend Foundation + Database Migrations + Schema Tests.
