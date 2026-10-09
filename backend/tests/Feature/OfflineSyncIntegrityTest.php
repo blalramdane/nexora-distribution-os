@@ -13,6 +13,86 @@ class OfflineSyncIntegrityTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_authenticated_user_can_register_a_new_field_device(): void
+    {
+        [$organization, $user] = $this->foundation();
+        $deviceUuid = (string) Str::uuid();
+
+        $response = $this->actingAs($user)->postJson('/api/v1/sync/device', [
+            'device_uuid' => $deviceUuid,
+            'name' => 'Field Browser',
+            'platform' => 'web',
+            'app_version' => '0.1.0',
+        ]);
+
+        $response->assertOk()->assertJson([
+            'registered' => true,
+            'device_uuid' => $deviceUuid,
+            'status' => 'active',
+        ]);
+
+        $this->assertDatabaseHas('devices', [
+            'organization_id' => $organization->id,
+            'user_id' => $user->id,
+            'device_uuid' => $deviceUuid,
+            'status' => 'active',
+        ]);
+    }
+
+    public function test_device_registration_is_idempotent_for_the_same_user(): void
+    {
+        [, $user] = $this->foundation();
+        $deviceUuid = (string) Str::uuid();
+        $payload = ['device_uuid' => $deviceUuid, 'platform' => 'web'];
+
+        $this->actingAs($user)->postJson('/api/v1/sync/device', $payload)->assertOk();
+        $this->actingAs($user)->postJson('/api/v1/sync/device', $payload)->assertOk();
+
+        $this->assertSame(1, DB::table('devices')->where('device_uuid', $deviceUuid)->count());
+    }
+
+    public function test_device_registration_cannot_take_over_another_users_device(): void
+    {
+        [, $firstUser, $deviceUuid] = $this->foundation();
+        $secondUser = User::query()->create([
+            'organization_id' => $firstUser->organization_id,
+            'name' => 'Second Sync User',
+            'email' => 'second-sync-' . Str::uuid() . '@nexora.test',
+            'phone' => '010' . random_int(10000000, 99999999),
+            'password' => 'secret-password',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($secondUser)->postJson('/api/v1/sync/device', [
+            'device_uuid' => $deviceUuid,
+            'platform' => 'web',
+        ])->assertStatus(422)->assertJsonValidationErrors(['device_uuid']);
+
+        $this->assertDatabaseHas('devices', [
+            'device_uuid' => $deviceUuid,
+            'user_id' => $firstUser->id,
+        ]);
+    }
+
+    public function test_revoked_device_cannot_be_reactivated_by_registration(): void
+    {
+        [, $user, $deviceUuid] = $this->foundation();
+        DB::table('devices')->where('device_uuid', $deviceUuid)->update([
+            'status' => 'revoked',
+            'revoked_at' => now(),
+        ]);
+
+        $this->actingAs($user)->postJson('/api/v1/sync/device', [
+            'device_uuid' => $deviceUuid,
+            'platform' => 'web',
+        ])->assertStatus(422)->assertJsonValidationErrors(['device_uuid']);
+
+        $this->assertDatabaseHas('devices', [
+            'device_uuid' => $deviceUuid,
+            'status' => 'revoked',
+        ]);
+    }
+
     public function test_sync_accepts_operation_and_returns_authoritative_ack(): void
     {
         [$organization, $user, $deviceUuid] = $this->foundation();
