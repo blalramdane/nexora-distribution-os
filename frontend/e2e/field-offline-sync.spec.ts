@@ -74,6 +74,21 @@ test("field visit queues offline and is acknowledged after reconnect", async ({ 
 
   expect(queued.operationUuid).toBeTruthy();
 
+  await page.route("**/sync/device", async (route) => {
+    const body = route.request().postDataJSON();
+    expect(body.device_uuid).toBeTruthy();
+    expect(body.platform).toBe("web");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        registered: true,
+        device_uuid: body.device_uuid,
+        status: "active",
+      }),
+    });
+  });
+
   await page.route("**/sync/operations", async (route) => {
     const request = route.request();
     const body = request.postDataJSON();
