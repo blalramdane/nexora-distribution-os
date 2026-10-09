@@ -264,7 +264,7 @@ final class SyncController extends Controller
             ]);
         }
 
-        $validator = Validator::make($payload['body'], [
+        $validator = app('validator')->make($payload['body'], [
             'trip_id' => ['required', 'string', 'size:26'],
             'customer_id' => ['required', 'string', 'size:26'],
             'status' => ['required', 'in:checked_in,visited,skipped'],
