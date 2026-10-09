@@ -12,6 +12,76 @@ use Throwable;
 
 final class SyncController extends Controller
 {
+    public function registerDevice(Request $request)
+    {
+        $data = $request->validate([
+            'device_uuid' => ['required', 'uuid'],
+            'name' => ['nullable', 'string', 'max:128'],
+            'platform' => ['nullable', 'string', 'max:32'],
+            'app_version' => ['nullable', 'string', 'max:64'],
+        ]);
+
+        $user = $request->user();
+        $organizationId = $user->organization_id;
+
+        $device = DB::transaction(function () use ($data, $user, $organizationId) {
+            $device = DB::table('devices')
+                ->where('organization_id', $organizationId)
+                ->where('device_uuid', $data['device_uuid'])
+                ->lockForUpdate()
+                ->first();
+
+            if ($device) {
+                if ($device->status !== 'active' || $device->revoked_at !== null) {
+                    throw ValidationException::withMessages([
+                        'device_uuid' => ['This device has been revoked and cannot be registered again.'],
+                    ]);
+                }
+
+                if ($device->user_id && $device->user_id !== $user->id) {
+                    throw ValidationException::withMessages([
+                        'device_uuid' => ['This device is assigned to another user.'],
+                    ]);
+                }
+
+                DB::table('devices')->where('id', $device->id)->update([
+                    'user_id' => $user->id,
+                    'name' => $data['name'] ?? $device->name ?? 'NEXORA Field PWA',
+                    'platform' => $data['platform'] ?? $device->platform ?? 'web',
+                    'app_version' => $data['app_version'] ?? $device->app_version,
+                    'last_seen_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                return DB::table('devices')->where('id', $device->id)->first();
+            }
+
+            $id = (string) Str::ulid();
+            DB::table('devices')->insert([
+                'id' => $id,
+                'organization_id' => $organizationId,
+                'user_id' => $user->id,
+                'device_uuid' => $data['device_uuid'],
+                'name' => $data['name'] ?? 'NEXORA Field PWA',
+                'platform' => $data['platform'] ?? 'web',
+                'app_version' => $data['app_version'] ?? null,
+                'status' => 'active',
+                'last_seen_at' => now(),
+                'registered_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            return DB::table('devices')->where('id', $id)->first();
+        });
+
+        return response()->json([
+            'registered' => true,
+            'device_uuid' => $device->device_uuid,
+            'status' => $device->status,
+        ], 200);
+    }
+
     public function store(Request $request, TransactionPostingService $posting)
     {
         $data = $request->validate([
