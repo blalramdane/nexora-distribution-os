@@ -188,11 +188,11 @@ final class SyncController extends Controller
 
             try {
                 if ($data['operation_type'] === 'field.visit') {
-                    $result = $this->dispatchFieldVisit(
+                    $result = DB::transaction(fn () => $this->dispatchFieldVisit(
                         $organizationId,
                         $request->user()->id,
                         $data['payload']
-                    );
+                    ));
                 } else {
                     $result = $this->dispatchTransaction(
                         $organizationId,
