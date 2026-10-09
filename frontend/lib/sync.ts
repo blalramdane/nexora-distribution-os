@@ -63,11 +63,27 @@ export async function queueOfflineOperation(
   return operation;
 }
 
+async function registerDevice(deviceUuid: string): Promise<void> {
+  await api<{ registered: boolean; device_uuid: string; status: string }>("/sync/device", {
+    method: "POST",
+    headers: { "X-Device-UUID": deviceUuid },
+    body: JSON.stringify({
+      device_uuid: deviceUuid,
+      name: "NEXORA Field PWA",
+      platform: "web",
+      app_version: "0.1.0",
+    }),
+  });
+}
+
 async function sendSyncEnvelope(op: SyncOperation, payload: QueuePayload): Promise<SyncEnvelopeResponse> {
+  const deviceUuid = getDeviceUuid();
+  await registerDevice(deviceUuid);
+
   const response = await api<SyncEnvelopeResponse>("/sync/operations", {
     method: "POST",
     headers: {
-      "X-Device-UUID": getDeviceUuid(),
+      "X-Device-UUID": deviceUuid,
       "Idempotency-Key": op.idempotencyKey,
     },
     body: JSON.stringify({
