@@ -52,6 +52,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/trips/{trip}/customers', [TripController::class, 'assignCustomer']);
         Route::post('/trip-loads', [TripLoadController::class, 'store']);
         Route::post('/trip-settlements', [TripSettlementController::class, 'store']);
+        Route::post('/sync/device', [SyncController::class, 'registerDevice']);
         Route::post('/sync/operations', [SyncController::class, 'store']);
         Route::get('/field/today', [FieldController::class, 'today']);
         Route::post('/field/visits', [FieldController::class, 'visit']);
