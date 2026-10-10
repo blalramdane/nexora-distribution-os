@@ -8,6 +8,19 @@ use Illuminate\Support\Facades\DB;
 
 class InventoryController extends Controller
 {
+    public function adjust(Request $request, \App\Services\Transactions\TransactionPostingService $posting)
+    {
+        $data=$request->validate([
+            'product_id'=>['required','string','size:26'],
+            'location_id'=>['required','string','size:26'],
+            'quantity_delta'=>['required','numeric','not_in:0'],
+            'reason'=>['required','string','max:255'],
+            'idempotency_key'=>['required','string','max:255'],
+        ]);
+        $data['created_by']=$request->user()->id;
+        return response()->json($posting->postStockAdjustment($request->user()->organization_id,$data),201);
+    }
+
     public function index(Request $request)
     {
         $query=DB::table('stock_balances as sb')

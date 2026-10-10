@@ -143,6 +143,47 @@ final class TransactionPostingService
         }, attempts: 5);
     }
 
+    public function postStockAdjustment(string $organizationId, array $data): array
+    {
+        return DB::transaction(function () use ($organizationId, $data): array {
+            if ($replay = $this->claimIdempotency($organizationId, 'stock.adjust', $data['idempotency_key'] ?? null, $data)) {
+                [$type, $id] = array_pad(explode(':', $replay, 2), 2, null);
+                if ($type !== 'stock_adjustment' || !$id) {
+                    throw ValidationException::withMessages(['idempotency_key' => ['Stored stock adjustment response is invalid.']]);
+                }
+                $movement = DB::table('stock_movements')->where('organization_id', $organizationId)->where('id', $id)->first();
+                if (!$movement) throw ValidationException::withMessages(['idempotency_key' => ['Stored stock adjustment could not be replayed.']]);
+                return ['id'=>$movement->id,'product_id'=>$movement->product_id,'location_id'=>$movement->location_id,'quantity_delta'=>$movement->quantity_base,'status'=>'posted'];
+            }
+
+            $location = DB::table('locations')->where('organization_id',$organizationId)->where('id',$data['location_id'])->where('status','active')->firstOrFail();
+            $product = DB::table('products')->where('organization_id',$organizationId)->where('id',$data['product_id'])->where('active',true)->firstOrFail();
+            $delta = (string)$data['quantity_delta'];
+            $balance = DB::table('stock_balances')->where('organization_id',$organizationId)->where('product_id',$product->id)->where('location_id',$location->id)->lockForUpdate()->first();
+            $oldQty = (string)($balance->quantity_base ?? 0);
+            $newQty = bcadd($oldQty,$delta,6);
+            if (bccomp($newQty,'0',6) < 0) throw ValidationException::withMessages(['quantity_delta'=>['Stock adjustment cannot make the balance negative.']]);
+            $averageCost = (string)($balance->average_cost ?? $product->default_cost ?? 0);
+            if ($balance) {
+                DB::table('stock_balances')->where('id',$balance->id)->update(['quantity_base'=>$newQty,'updated_at'=>now()]);
+            } else {
+                DB::table('stock_balances')->insert(['id'=>(string)Str::ulid(),'organization_id'=>$organizationId,'product_id'=>$product->id,'location_id'=>$location->id,'quantity_base'=>$newQty,'reserved_quantity_base'=>0,'average_cost'=>$averageCost,'updated_at'=>now()]);
+            }
+            $movementId=(string)Str::ulid();
+            $documentNumber=$this->nextDocumentNumber($organizationId,'stock_adjustment','SA');
+            DB::table('stock_movements')->insert([
+                'id'=>$movementId,'organization_id'=>$organizationId,'transaction_uuid'=>(string)Str::uuid(),'product_id'=>$product->id,'location_id'=>$location->id,
+                'movement_type'=>'stock_adjustment','quantity_base'=>$delta,'unit_cost'=>$averageCost,'source_document_type'=>'stock_adjustment','source_document_id'=>$movementId,
+                'occurred_at'=>now(),'posted_at'=>now(),'created_by'=>$data['created_by'] ?? null,'device_id'=>$data['device_id'] ?? null,'reference'=>$documentNumber,
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+            DB::table('stock_movements')->where('id',$movementId)->update(['reference'=>substr($documentNumber.' | '.$data['reason'],0,255),'updated_at'=>now()]);
+            $result=['id'=>$movementId,'document_number'=>$documentNumber,'product_id'=>$product->id,'location_id'=>$location->id,'quantity_delta'=>$delta,'balance_after'=>$newQty,'status'=>'posted'];
+            $this->completeIdempotency($organizationId,'stock.adjust',$data['idempotency_key'] ?? null,'stock_adjustment:'.$movementId);
+            return $result;
+        }, attempts: 5);
+    }
+
     public function postSale(string $organizationId, array $data): array
     {
         return DB::transaction(function () use ($organizationId, $data): array {
