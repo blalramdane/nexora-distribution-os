@@ -1205,3 +1205,50 @@ CI/CD, backup, restore, monitoring, alerts, error tracking, load test and E2E.
 
 Only then:
 **RELEASE APPROVED.**
+
+
+---
+
+# 26. CONTINUOUS EXECUTION MODE — USER REQUEST
+
+The owner requested that development proceed as a continuous engineering loop so they can receive a usable local Alpha sooner.
+
+## Required loop
+Repeat this cycle without asking the owner for permission between ordinary engineering tasks:
+
+1. Read the current execution state and inspect the actual repository.
+2. Select only the current active task from this file.
+3. Reproduce the issue or establish baseline evidence.
+4. Implement the smallest complete change consistent with the architecture.
+5. Add/update tests for success, failure, authorization, idempotency, and regression paths relevant to the change.
+6. Run focused tests, full relevant suite, type/lint checks, and production build as applicable.
+7. Review the diff for security, tenant boundaries, financial/inventory invariants, migrations, and backward compatibility.
+8. Update status and record exact evidence.
+9. NEXORA AI reviews the evidence.
+10. If approved, advance to the next task and repeat. If rejected, stay in the same task and correct it.
+
+## Stop conditions
+Stop and ask the owner only when:
+- an explicit business policy decision is required by Section 19,
+- real credentials, paid services, or external spending are required,
+- a destructive or irreversible action is proposed,
+- repository evidence is insufficient and the missing evidence cannot be retrieved safely,
+- a security or data-integrity risk cannot be resolved within the current task.
+
+Do not stop merely to ask whether to continue, whether to run tests, or whether to implement the next approved task.
+
+## Alpha-first delivery strategy
+Prioritize a coherent, locally runnable Alpha over disconnected scaffolds:
+1. Reproducible local setup and demo seed.
+2. Authentication and tenant-safe session.
+3. Catalog + customers/suppliers.
+4. Warehouse inventory and purchase receipt.
+5. Sales + payments + returns with ledger/stock reconciliation.
+6. Vehicle loading + trips + visit/collection + settlement.
+7. Offline sync with server-authoritative ACK and duplicate-delivery safety.
+8. Operational dashboard and reports reconciled to posted transactions.
+
+Do not skip the Transaction Engine or create a second mock business-data path to make the UI appear functional. Demo data may be seeded, but every displayed operational result must be clearly identified as demo data and real mutations must use the supported API.
+
+## Delivery cadence
+Aim to deliver the first coherent Alpha at the earliest safe checkpoint. A batch can be internally split into smaller reviewable tasks, but its acceptance gate remains mandatory. Report progress in terms of working flows and test evidence, not number of files or lines written.
