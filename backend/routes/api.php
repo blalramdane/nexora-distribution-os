@@ -51,6 +51,9 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/trips', [TripController::class, 'store']);
         Route::get('/trips/{trip}/stock', [TripController::class, 'stock']);
         Route::post('/trips/{trip}/customers', [TripController::class, 'assignCustomer']);
+        Route::get('/trips/{trip}/route', [TripController::class, 'route']);
+        Route::post('/trips/{trip}/route/optimize', [TripController::class, 'optimizeRoute']);
+        Route::post('/trips/{trip}/route/reorder', [TripController::class, 'reorderRoute']);
         Route::post('/trip-loads', [TripLoadController::class, 'store']);
         Route::post('/trip-settlements', [TripSettlementController::class, 'store']);
         Route::post('/sync/device', [SyncController::class, 'registerDevice']);
