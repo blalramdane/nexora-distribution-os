@@ -60,6 +60,31 @@ class EndToEndDistributionGateTest extends TestCase
             'sequence' => 1,
         ]);
 
+        $secondCustomerId = (string) Str::ulid();
+        DB::table('customers')->insert([
+            'id' => $secondCustomerId,
+            'organization_id' => $organization->id,
+            'code' => 'CUS-E2E-2',
+            'name' => 'E2E Customer 2',
+            'normalized_name' => 'e2e customer 2',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $secondAssignment = $this->postJson('/api/v1/trips/'.$trip['id'].'/customers', [
+            'customer_id' => $secondCustomerId,
+        ])->assertOk()->json();
+
+        $this->assertSame('assigned', $secondAssignment['status']);
+        $this->assertSame(2, $secondAssignment['sequence']);
+        $this->assertDatabaseHas('trip_customers', [
+            'organization_id' => $organization->id,
+            'trip_id' => $trip['id'],
+            'customer_id' => $secondCustomerId,
+            'sequence' => 2,
+        ]);
+
         $loadPayload = [
             'trip_id' => $trip['id'],
             'from_location_id' => $warehouseId,

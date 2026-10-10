@@ -34,7 +34,14 @@ class TripController extends Controller{
  public function assignCustomer(Request $request,string $trip){
   $data=$request->validate(['customer_id'=>['required','string','size:26'],'sequence'=>['nullable','integer','min:1']]);$org=$request->user()->organization_id;
   abort_unless(DB::table('trips')->where('id',$trip)->where('organization_id',$org)->exists(),404);
-  DB::table('trip_customers')->updateOrInsert(['trip_id'=>$trip,'customer_id'=>$data['customer_id']],['id'=>(string)Str::ulid(),'organization_id'=>$org,'sequence'=>$data['sequence']??1,'planned'=>true,'visit_status'=>'planned','updated_at'=>now(),'created_at'=>now()]);
-  return response()->json(['status'=>'assigned']);
+  abort_unless(DB::table('customers')->where('id',$data['customer_id'])->where('organization_id',$org)->exists(),404);
+  $sequence=$data['sequence']??null;
+  DB::transaction(function()use($trip,$data,$org,&$sequence){
+   $existing=DB::table('trip_customers')->where('trip_id',$trip)->where('customer_id',$data['customer_id'])->lockForUpdate()->first();
+   if($existing){$sequence=$existing->sequence;return;}
+   if($sequence===null){$sequence=((int)DB::table('trip_customers')->where('trip_id',$trip)->lockForUpdate()->max('sequence'))+1;}
+   DB::table('trip_customers')->insert(['id'=>(string)Str::ulid(),'organization_id'=>$org,'trip_id'=>$trip,'customer_id'=>$data['customer_id'],'sequence'=>$sequence,'planned'=>true,'visit_status'=>'planned','created_at'=>now(),'updated_at'=>now()]);
+  });
+  return response()->json(['status'=>'assigned','sequence'=>$sequence]);
  }
 }
