@@ -1110,8 +1110,10 @@ Corrections verified during Batch 1:
 - Isolated migration lifecycle probe — **PASS**: fresh migrate, seed twice, full rollback, migrate again, final seed. Temporary probe database removed.
 - Frontend lint/build and 3 Playwright browser smoke tests were previously verified on project-specific ports; frontend/API health endpoints still return HTTP 200.
 - MySQL 8.4 gate: **BLOCKED / NOT VERIFIED** on this workstation; no local MySQL service and Docker Desktop engine unavailable. Do not infer MySQL compatibility from SQLite results.
-- A remote GitHub Actions run using an isolated MySQL 8.4 service passed fresh migration, repeated seed, full rollback, re-migrate, final seed, and the full backend test suite for the initial composite-FK migration (`8b80e3a`). An expanded relationship set and a SQLite rollback portability correction are now queued for a second CI run; do not treat the earlier pass as validation of those later edits.
-- Migration 11 now scopes the `user_roles` pivot to `organization_id` and refuses to backfill cross-tenant role assignments; `User::roles()` and `Role::users()` write/filter the organization key. Its MySQL validation is pending a fresh CI run.
+- GitHub Actions on an isolated MySQL **8.4.11** service passed all database lifecycle gates and the full backend suite on commit `0c89ee7`: **51 passed, 317 assertions**.
+- The MySQL suite includes three negative cross-tenant insertion tests (trip/customer assignment, stock/product-location mismatch, sales invoice/customer mismatch). The end-to-end distribution gate also passed in the same MySQL run.
+- Migration 11 scopes the `user_roles` pivot to `organization_id`, backfills existing assignments, and refuses migration if user/role organizations disagree. `User::roles()` and `Role::users()` write/filter the organization key.
+- Local SQLite suite: **48 passed, 317 assertions, 3 MySQL-only constraint tests skipped by design**. An isolated SQLite lifecycle including migration 11 passed fresh migration, repeated seeding, full rollback, re-migration, and final seed.
 - Remaining schema exceptions: nullable `SET NULL` relations, global/shared units/geography, and polymorphic party/document/source references need explicit domain/deletion-policy decisions before adding safe composite constraints. Batch 2 stays active until those exceptions are documented and tested.
 
 ## Next correction task
