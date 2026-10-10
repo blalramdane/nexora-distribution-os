@@ -57,7 +57,7 @@ cd backend
 
 For the first local setup, copy `backend/.env.example` to `backend/.env`, set `APP_ENV=local`, set `DB_CONNECTION=sqlite`, and point `DB_DATABASE` to an absolute path ending in `backend/database/distribution-local.sqlite`. Then run `artisan key:generate`, `artisan migrate --seed`, and `artisan nexora:local-alpha`. The last command creates a local-only admin and starter records; its ignored `.local-alpha-credentials.txt` file contains the generated login details. It must never be committed or reused outside this machine.
 
-The frontend must have `frontend/.env.local` set to `NEXT_PUBLIC_API_URL=http://127.0.0.1:8017/api/v1`. Never point this local environment at another project's database or reuse its credentials. Local start/stop helper scripts are in `tools/` and refuse to take over occupied ports.
+The frontend must have `frontend/.env.local` set to `NEXT_PUBLIC_API_URL=http://127.0.0.1:8017/api/v1`. The backend's `CORS_ALLOWED_ORIGINS` must include the exact frontend origin (the local default covers ports 3017 on `localhost` and `127.0.0.1`); set an explicit trusted allowlist for production. Never point this local environment at another project's database or reuse its credentials. Local start/stop helper scripts are in `tools/` and refuse to take over occupied ports.
 
 Browser smoke tests run on isolated port `3027` and never reuse another running server:
 
