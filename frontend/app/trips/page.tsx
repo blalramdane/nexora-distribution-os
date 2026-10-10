@@ -15,18 +15,13 @@ type Me={id:string;name:string};
 type RouteCustomer={customer_id:string;sequence:number;visit_status:string;code:string;name:string;phone?:string;address_text?:string;primary_address?:string;latitude?:number|null;longitude?:number|null};
 
 export default function Trips(){
- const [products,setProducts]=useState<Product[]>([]),[loadLines,setLoadLines]=useState<LoadLine[]>([]),[closingLines,setClosingLines]=useState<ClosingLine[]>([]),[actualCash,setActualCash]=useState(""),[loadMsg,setLoadMsg]=useState(""),[vehicles,setVehicles]=useState<Vehicle[]>([]),[locations,setLocations]=useState<Location[]>([]),[customers,setCustomers]=useState<Customer[]>([]),[trips,setTrips]=useState<Trip[]>([]),[vehicle,setVehicle]=useState(""),[location,setLocation]=useState(""),[customer,setCustomer]=useState(""),[selected,setSelected]=useState<Trip|null>(null),[me,setMe]=useState<Me|null>(null),[msg,setMsg]=useState(""),[routeCustomers,setRouteCustomers]=useState<RouteCustomer[]>([]),[routeMsg,setRouteMsg]=useState("");
+ const [products,setProducts]=useState<Product[]>([]),[loadLines,setLoadLines]=useState<LoadLine[]>([]),[closingLines,setClosingLines]=useState<ClosingLine[]>([]),[actualCash,setActualCash]=useState(""),[loadMsg,setLoadMsg]=useState(""),[vehicles,setVehicles]=useState<Vehicle[]>([]),[locations,setLocations]=useState<Location[]>([]),[customers,setCustomers]=useState<Customer[]>([]),[trips,setTrips]=useState<Trip[]>([]),[vehicle,setVehicle]=useState(""),[location,setLocation]=useState(""),[customer,setCustomer]=useState(""),[selected,setSelected]=useState<Trip|null>(null),[me,setMe]=useState<Me|null>(null),[msg,setMsg]=useState(""),[routeCustomers,setRouteCustomers]=useState<RouteCustomer[]>([]),[routeMsg,setRouteMsg]=useState(""),[loadingError,setLoadingError]=useState("");
 
- const load=()=>api<Trip[]>("/trips").then(setTrips).catch(()=>{});
- const loadRoute=(tripId:string)=>api<RouteCustomer[]>(`/trips/${tripId}/route`).then(setRouteCustomers).catch(()=>setRouteCustomers([]));
+ const load=()=>api<Trip[]>("/trips").then(setTrips).catch(e=>setLoadingError((e as Error).message));
+ const loadRoute=(tripId:string)=>api<RouteCustomer[]>(`/trips/${tripId}/route`).then(setRouteCustomers).catch(e=>setRouteMsg((e as Error).message));
 
  useEffect(()=>{
-  api<Vehicle[]>("/vehicles").then(x=>{setVehicles(x);setVehicle(x[0]?.id||"")});
-  api<Location[]>("/locations").then(x=>{setLocations(x);setLocation(x[0]?.id||"")});
-  api<Customer[]>("/customers").then(setCustomers);
-  api<Product[]>("/products").then(setProducts);
-  api<Me>("/auth/me").then(setMe);
-  load();
+  Promise.all([api<Vehicle[]>("/vehicles"),api<Location[]>("/locations"),api<Customer[]>("/customers"),api<Product[]>("/products"),api<Me>("/auth/me"),api<Trip[]>("/trips")]).then(([v,l,c,p,m,t])=>{setVehicles(v);setVehicle(v[0]?.id||"");setLocations(l);setLocation(l[0]?.id||"");setCustomers(c);setProducts(p);setMe(m);setTrips(t);setLoadingError("")}).catch(e=>setLoadingError((e as Error).message));
  },[]);
 
  const selectTrip=(t:Trip)=>{setSelected(t);loadRoute(t.id);refreshClosing(t.id)};
@@ -34,18 +29,23 @@ export default function Trips(){
  const refreshClosing=(tripId:string)=>api<{product_id:string;name_ar:string;quantity_base:number}[]>(`/trips/${tripId}/stock`).then(rows=>setClosingLines(rows.map(r=>({product_id:r.product_id,name_ar:r.name_ar,quantity:Number(r.quantity_base)})))).catch(()=>setClosingLines([]));
 
  const create=async()=>{
-  if(!vehicle||!location||!me)return setMsg("اختار العربية والموقع.");
+  if(loadingError)return setMsg("بيانات الرحلات لم تُحمّل: "+loadingError);
+  if(!vehicle||!location||!me)return setMsg("لازم يكون فيه عربية وموقع نشط ومستخدم مسجل قبل إنشاء الرحلة.");
   try{const t=await api<Trip>("/trips",{method:"POST",body:JSON.stringify({vehicle_id:vehicle,rep_user_id:me.id,origin_location_id:location})});setMsg("تم إنشاء الرحلة.");await load();selectTrip(t)}catch(e){setMsg((e as Error).message)}
  };
 
  const addLoad=(p:Product)=>{setLoadLines(x=>x.some(l=>l.product.id===p.id)?x.map(l=>l.product.id===p.id?{...l,quantity:l.quantity+1}:l):[...x,{product:p,quantity:1}])};
 
  const postLoad=async()=>{
+  if(loadingError)return setLoadMsg("بيانات الشاشة لم تُحمّل: "+loadingError);
   if(!selected||!location||!loadLines.length)return setLoadMsg("اختار الرحلة والمخزن وأضف الأصناف.");
+  if(loadLines.some(l=>!Number.isFinite(l.quantity)||l.quantity<=0))return setLoadMsg("كمية التحميل لازم تكون أكبر من صفر.");
+  setLoadMsg("");
   try{await api("/trip-loads",{method:"POST",body:JSON.stringify({trip_id:selected.id,from_location_id:location,idempotency_key:crypto.randomUUID(),items:loadLines.map(l=>({product_id:l.product.id,quantity_base:l.quantity}))})});setLoadMsg("تم تحميل العربية وتحديث المخزون.");setLoadLines([]);load()}catch(e){setLoadMsg((e as Error).message)}
  };
 
  const assign=async()=>{
+  if(loadingError)return setMsg("بيانات الشاشة لم تُحمّل: "+loadingError);
   if(!selected||!customer)return setMsg("اختار الرحلة والعميل.");
   try{await api(`/trips/${selected.id}/customers`,{method:"POST",body:JSON.stringify({customer_id:customer})});setMsg("تم إضافة العميل للرحلة.");setCustomer("");loadRoute(selected.id)}catch(e){setMsg((e as Error).message)}
  };
@@ -68,12 +68,13 @@ export default function Trips(){
  };
 
  const settle=async()=>{
-  if(!selected||actualCash==="")return setLoadMsg("اختار الرحلة وأدخل النقدية الفعلية.");
+  if(!selected||actualCash===""||!Number.isFinite(Number(actualCash))||Number(actualCash)<0)return setLoadMsg("اختار الرحلة وأدخل نقدية فعلية صحيحة لا تقل عن صفر.");
   try{const result=await api<{expected_cash:number;cash_variance:number;stock_variance_value:number}>("/trip-settlements",{method:"POST",body:JSON.stringify({trip_id:selected.id,actual_cash:Number(actualCash),opening_cash:0,closing_items:closingLines.map(l=>({product_id:l.product_id,quantity_base:l.quantity}))})});setLoadMsg(`تمت التسوية — المتوقع ${result.expected_cash} EGP، فرق النقدية ${result.cash_variance} EGP`);load()}catch(e){setLoadMsg((e as Error).message)}
  };
 
  return <main className="main">
   <div className="topbar"><div><h1 className="title">العربيات والرحلات</h1><div className="subtitle">Vehicle → Load → Route → Customer Visits → Sales → Settlement</div></div><span className="badge blue"><Route size={11}/> Distribution</span></div>
+  {loadingError&&<div className="badge red" role="alert" style={{display:"block",padding:12,marginBottom:14,whiteSpace:"normal"}}>تعذر تحميل بيانات التشغيل: {loadingError} <button className="secondary" onClick={()=>{setLoadingError("");Promise.all([api<Vehicle[]>("/vehicles"),api<Location[]>("/locations"),api<Customer[]>("/customers"),api<Product[]>("/products"),api<Me>("/auth/me"),api<Trip[]>("/trips")]).then(([v,l,c,p,m,t])=>{setVehicles(v);setVehicle(v[0]?.id||"");setLocations(l);setLocation(l[0]?.id||"");setCustomers(c);setProducts(p);setMe(m);setTrips(t)}).catch(e=>setLoadingError((e as Error).message))}}>إعادة المحاولة</button></div>}
 
   <div className="split">
    <section className="card">
