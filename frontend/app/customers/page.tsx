@@ -34,6 +34,7 @@ export default function Customers(){
       <label>Latitude<input type="number" step="any" value={form.latitude} onChange={e=>setForm({...form,latitude:e.target.value})}/></label>
       <label>Longitude<input type="number" step="any" value={form.longitude} onChange={e=>setForm({...form,longitude:e.target.value})}/></label>
     </div>
+    {msg&&<div className="badge blue" role="alert" style={{display:"block",padding:10,marginTop:12,whiteSpace:"normal"}}>{msg}</div>}
     <div style={{display:"flex",gap:8,marginTop:14,justifyContent:"flex-end"}}><button type="button" className="icon-btn" onClick={()=>setOpen(false)}>إلغاء</button><button className="primary" disabled={saving}>{saving?"جاري الحفظ...":"حفظ العميل"}</button></div>
   </form></div>}
  </main>
