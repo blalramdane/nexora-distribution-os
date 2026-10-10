@@ -17,6 +17,7 @@ class PermissionSeeder extends Seeder
             ['key' => 'customers.view', 'name' => 'View customers'],
             ['key' => 'customers.manage', 'name' => 'Manage customers'],
             ['key' => 'suppliers.view', 'name' => 'View suppliers'],
+            ['key' => 'suppliers.manage', 'name' => 'Manage suppliers'],
             ['key' => 'settings.manage', 'name' => 'Manage organization settings'],
             ['key' => 'sales.view', 'name' => 'View sales'],
             ['key' => 'sales.post', 'name' => 'Post sales'],

@@ -22,7 +22,21 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const response = await fetch(`${API_URL}${path}`, { ...options, headers });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new ApiError(response.status, payload, payload?.message || "حدث خطأ أثناء الاتصال بالنظام.");
+    if (response.status === 401 && typeof window !== "undefined" && token) {
+      localStorage.removeItem("nexora_token");
+      if (window.location.pathname !== "/login") window.location.assign("/login?reason=session-expired");
+    }
+    const validation = payload?.errors && typeof payload.errors === "object"
+      ? Object.values(payload.errors).flat().join(" ")
+      : "";
+    const message = response.status === 401
+      ? "انتهت جلسة الدخول. سجّل الدخول مرة أخرى."
+      : response.status === 403
+        ? "حسابك لا يملك صلاحية تنفيذ العملية دي. راجع صلاحيات المستخدم."
+        : response.status === 422
+          ? validation || payload?.message || "راجع البيانات المدخلة."
+          : payload?.message || `تعذر تنفيذ العملية (HTTP ${response.status}).`;
+    throw new ApiError(response.status, payload, message);
   }
   return payload as T;
 }

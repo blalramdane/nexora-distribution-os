@@ -36,6 +36,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/products', [CatalogController::class, 'storeProduct'])->middleware('permission:products.manage');
         Route::get('/customers', [CustomerController::class, 'index'])->middleware('permission:customers.view');
         Route::get('/suppliers', [SupplierController::class, 'index'])->middleware('permission:suppliers.view');
+        Route::post('/suppliers', [SupplierController::class, 'store'])->middleware('permission:suppliers.manage');
         Route::get('/finance/references', [FinanceReferenceController::class, 'index'])->middleware('permission:settings.manage');
         Route::post('/customers', [CustomerController::class, 'store'])->middleware('permission:customers.manage');
         Route::get('/inventory', [InventoryController::class, 'index'])->middleware('permission:inventory.view');
