@@ -93,9 +93,9 @@ class OfflineSyncIntegrityTest extends TestCase
         ]);
     }
 
-    public function test_sync_accepts_operation_and_returns_authoritative_ack(): void
+    public function test_sync_persists_authoritative_field_visit_before_acknowledging(): void
     {
-        [$organization, $user, $deviceUuid] = $this->foundation();
+        [$organization, $user, $deviceUuid, $tripId, $customerId] = $this->fieldVisitFoundation();
 
         $payload = [
             'operation_uuid' => (string) Str::uuid(),
@@ -103,7 +103,15 @@ class OfflineSyncIntegrityTest extends TestCase
             'schema_version' => 1,
             'idempotency_key' => 'sync-' . Str::uuid(),
             'client_created_at' => now()->toIso8601String(),
-            'payload' => ['trip_id' => 'trip-test', 'customer_id' => 'customer-test'],
+            'payload' => [
+                'path' => '/field/visits',
+                'body' => [
+                    'trip_id' => $tripId,
+                    'customer_id' => $customerId,
+                    'status' => 'visited',
+                    'notes' => 'Offline visit synced',
+                ],
+            ],
         ];
 
         $response = $this->actingAs($user)->withHeader('X-Device-UUID', $deviceUuid)
@@ -113,6 +121,7 @@ class OfflineSyncIntegrityTest extends TestCase
             ->assertJson([
                 'status' => 'accepted',
                 'operation_uuid' => $payload['operation_uuid'],
+                'result_reference' => 'customer_visit:' . DB::table('customer_visits')->value('id'),
                 'authoritative' => true,
             ]);
 
@@ -123,11 +132,25 @@ class OfflineSyncIntegrityTest extends TestCase
             'idempotency_key' => $payload['idempotency_key'],
             'status' => 'accepted',
         ]);
+        $this->assertDatabaseHas('customer_visits', [
+            'organization_id' => $organization->id,
+            'trip_id' => $tripId,
+            'customer_id' => $customerId,
+            'user_id' => $user->id,
+            'status' => 'visited',
+            'notes' => 'Offline visit synced',
+        ]);
+        $this->assertDatabaseHas('trip_customers', [
+            'organization_id' => $organization->id,
+            'trip_id' => $tripId,
+            'customer_id' => $customerId,
+            'visit_status' => 'visited',
+        ]);
     }
 
-    public function test_sync_retry_returns_same_ack_without_creating_duplicate_operation(): void
+    public function test_sync_retry_returns_same_ack_without_duplicate_visit_or_operation(): void
     {
-        [$organization, $user, $deviceUuid] = $this->foundation();
+        [$organization, $user, $deviceUuid, $tripId, $customerId] = $this->fieldVisitFoundation();
 
         $payload = [
             'operation_uuid' => (string) Str::uuid(),
@@ -135,7 +158,10 @@ class OfflineSyncIntegrityTest extends TestCase
             'schema_version' => 1,
             'idempotency_key' => 'retry-' . Str::uuid(),
             'client_created_at' => now()->toIso8601String(),
-            'payload' => ['trip_id' => 'trip-test', 'customer_id' => 'customer-test'],
+            'payload' => [
+                'path' => '/field/visits',
+                'body' => ['trip_id' => $tripId, 'customer_id' => $customerId, 'status' => 'visited'],
+            ],
         ];
 
         $first = $this->actingAs($user)->withHeader('X-Device-UUID', $deviceUuid)
@@ -150,11 +176,16 @@ class OfflineSyncIntegrityTest extends TestCase
             ->where('organization_id', $organization->id)
             ->where('operation_uuid', $payload['operation_uuid'])
             ->count());
+        $this->assertSame(1, DB::table('customer_visits')
+            ->where('organization_id', $organization->id)
+            ->where('trip_id', $tripId)
+            ->where('customer_id', $customerId)
+            ->count());
     }
 
     public function test_sync_rejects_reuse_of_operation_uuid_with_different_payload(): void
     {
-        [, $user, $deviceUuid] = $this->foundation();
+        [, $user, $deviceUuid, $tripId, $customerId] = $this->fieldVisitFoundation();
 
         $uuid = (string) Str::uuid();
         $base = [
@@ -163,14 +194,17 @@ class OfflineSyncIntegrityTest extends TestCase
             'schema_version' => 1,
             'idempotency_key' => 'conflict-' . Str::uuid(),
             'client_created_at' => now()->toIso8601String(),
-            'payload' => ['trip_id' => 'trip-test', 'customer_id' => 'customer-a'],
+            'payload' => [
+                'path' => '/field/visits',
+                'body' => ['trip_id' => $tripId, 'customer_id' => $customerId, 'status' => 'visited'],
+            ],
         ];
 
         $this->actingAs($user)->withHeader('X-Device-UUID', $deviceUuid)
             ->postJson('/api/v1/sync/operations', $base)->assertStatus(202);
 
         $changed = $base;
-        $changed['payload']['customer_id'] = 'customer-b';
+        $changed['payload']['body']['notes'] = 'changed payload';
 
         $this->actingAs($user)->withHeader('X-Device-UUID', $deviceUuid)
             ->postJson('/api/v1/sync/operations', $changed)
@@ -199,6 +233,80 @@ class OfflineSyncIntegrityTest extends TestCase
             ->postJson('/api/v1/sync/operations', $payload)
             ->assertStatus(422)
             ->assertJsonValidationErrors(['device_uuid']);
+    }
+
+    private function fieldVisitFoundation(): array
+    {
+        [$organization, $user, $deviceUuid] = $this->foundation();
+
+        $locationId = (string) Str::ulid();
+        DB::table('locations')->insert([
+            'id' => $locationId,
+            'organization_id' => $organization->id,
+            'code' => 'FIELD-WH-' . substr($locationId, -6),
+            'name' => 'Field Test Location',
+            'type' => 'warehouse',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $vehicleId = (string) Str::ulid();
+        DB::table('vehicles')->insert([
+            'id' => $vehicleId,
+            'organization_id' => $organization->id,
+            'location_id' => $locationId,
+            'code' => 'FIELD-V-' . substr($vehicleId, -6),
+            'plate_number' => 'FIELD-' . substr($vehicleId, -6),
+            'name' => 'Field Test Vehicle',
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $tripId = (string) Str::ulid();
+        DB::table('trips')->insert([
+            'id' => $tripId,
+            'organization_id' => $organization->id,
+            'trip_number' => 'FIELD-TR-' . substr($tripId, -6),
+            'vehicle_id' => $vehicleId,
+            'rep_user_id' => $user->id,
+            'status' => 'active',
+            'trip_date' => now()->toDateString(),
+            'origin_location_id' => $locationId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $customerId = (string) Str::ulid();
+        DB::table('customers')->insert([
+            'id' => $customerId,
+            'organization_id' => $organization->id,
+            'code' => 'FIELD-C-' . substr($customerId, -6),
+            'name' => 'Field Visit Customer',
+            'normalized_name' => 'field visit customer',
+            'phone' => null,
+            'address_text' => 'Test address',
+            'credit_limit' => 0,
+            'payment_terms_days' => 0,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('trip_customers')->insert([
+            'id' => (string) Str::ulid(),
+            'organization_id' => $organization->id,
+            'trip_id' => $tripId,
+            'customer_id' => $customerId,
+            'sequence' => 1,
+            'planned' => true,
+            'visit_status' => 'planned',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return [$organization, $user, $deviceUuid, $tripId, $customerId];
     }
 
     private function foundation(): array

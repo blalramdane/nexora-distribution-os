@@ -188,14 +188,18 @@ final class SyncController extends Controller
 
             try {
                 if ($data['operation_type'] === 'field.visit') {
-                    $result = ['operation_type' => 'field.visit', 'status' => 'accepted'];
+                    $result = DB::transaction(fn () => $this->dispatchFieldVisit(
+                        $organizationId,
+                        $request->user()->id,
+                        $data['payload']
+                    ));
                 } else {
                     $result = $this->dispatchTransaction(
-                    $organizationId,
-                    $request->user()->id,
-                    $device->id,
-                    $data,
-                    $posting
+                        $organizationId,
+                        $request->user()->id,
+                        $device->id,
+                        $data,
+                        $posting
                     );
                 }
 
@@ -252,6 +256,98 @@ final class SyncController extends Controller
         });
     }
 
+    private function dispatchFieldVisit(string $organizationId, string $userId, array $payload): array
+    {
+        if (($payload['path'] ?? null) !== '/field/visits' || !is_array($payload['body'] ?? null)) {
+            throw ValidationException::withMessages([
+                'payload' => ['Field visit sync requires the /field/visits path and a body object.'],
+            ]);
+        }
+
+        $validator = app('validator')->make($payload['body'], [
+            'trip_id' => ['required', 'string', 'size:26'],
+            'customer_id' => ['required', 'string', 'size:26'],
+            'status' => ['required', 'in:checked_in,visited,skipped'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'notes' => ['nullable', 'string'],
+        ]);
+        $data = $validator->validate();
+
+        $trip = DB::table('trips')
+            ->where('organization_id', $organizationId)
+            ->where('id', $data['trip_id'])
+            ->where('rep_user_id', $userId)
+            ->first();
+
+        if (!$trip) {
+            throw ValidationException::withMessages([
+                'trip_id' => ['The trip does not belong to the authenticated field representative.'],
+            ]);
+        }
+
+        $assignmentExists = DB::table('trip_customers as tc')
+            ->join('customers as c', 'c.id', '=', 'tc.customer_id')
+            ->where('tc.organization_id', $organizationId)
+            ->where('tc.trip_id', $data['trip_id'])
+            ->where('tc.customer_id', $data['customer_id'])
+            ->where('c.organization_id', $organizationId)
+            ->exists();
+
+        if (!$assignmentExists) {
+            throw ValidationException::withMessages([
+                'customer_id' => ['The customer is not assigned to this trip.'],
+            ]);
+        }
+
+        $now = now();
+        $existing = DB::table('customer_visits')
+            ->where('organization_id', $organizationId)
+            ->where('trip_id', $data['trip_id'])
+            ->where('customer_id', $data['customer_id'])
+            ->where('user_id', $userId)
+            ->latest('created_at')
+            ->first();
+
+        if ($existing) {
+            $visitId = $existing->id;
+            DB::table('customer_visits')->where('id', $visitId)->update([
+                'status' => $data['status'],
+                'check_in_at' => $data['status'] === 'checked_in' ? ($existing->check_in_at ?: $now) : $existing->check_in_at,
+                'check_out_at' => in_array($data['status'], ['visited', 'skipped'], true) ? $now : $existing->check_out_at,
+                'latitude' => $data['latitude'] ?? $existing->latitude,
+                'longitude' => $data['longitude'] ?? $existing->longitude,
+                'notes' => $data['notes'] ?? $existing->notes,
+                'updated_at' => $now,
+            ]);
+        } else {
+            $visitId = (string) Str::ulid();
+            DB::table('customer_visits')->insert([
+                'id' => $visitId,
+                'organization_id' => $organizationId,
+                'trip_id' => $data['trip_id'],
+                'customer_id' => $data['customer_id'],
+                'user_id' => $userId,
+                'status' => $data['status'],
+                'check_in_at' => $data['status'] === 'checked_in' ? $now : null,
+                'check_out_at' => in_array($data['status'], ['visited', 'skipped'], true) ? $now : null,
+                'latitude' => $data['latitude'] ?? null,
+                'longitude' => $data['longitude'] ?? null,
+                'notes' => $data['notes'] ?? null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
+
+        DB::table('trip_customers')
+            ->where('organization_id', $organizationId)
+            ->where('trip_id', $data['trip_id'])
+            ->where('customer_id', $data['customer_id'])
+            ->update(['visit_status' => $data['status'], 'updated_at' => $now]);
+
+        return ['id' => $visitId, 'operation_type' => 'field.visit', 'status' => 'ok'];
+    }
+
     private function dispatchTransaction(
         string $organizationId,
         string $userId,
@@ -295,6 +391,7 @@ final class SyncController extends Controller
             'POST /returns/purchases' => 'purchase_return:' . $result['id'],
             'POST /purchases' => 'purchase_invoice:' . $result['id'],
             'POST /trip-loads' => 'trip_load:' . $result['id'],
+            'field.visit' => 'customer_visit:' . $result['id'],
             default => null,
         };
     }

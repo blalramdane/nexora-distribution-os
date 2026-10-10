@@ -94,7 +94,7 @@ test("field visit queues offline and is acknowledged after reconnect", async ({ 
     const body = request.postDataJSON();
     expect(request.headers()["x-device-uuid"]).toBeTruthy();
     expect(body.operation_uuid).toBe(queued.operationUuid);
-    expect(body.operation_type).toBe("POST");
+    expect(body.operation_type).toBe("field.visit");
     expect(body.schema_version).toBe(1);
     expect(body.payload.path).toBe("/field/visits");
 
