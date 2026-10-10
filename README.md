@@ -57,6 +57,15 @@ For the first local setup, copy `backend/.env.example` to `backend/.env`, set `A
 
 The frontend must have `frontend/.env.local` set to `NEXT_PUBLIC_API_URL=http://127.0.0.1:8017/api/v1`. Never point this local environment at another project's database or reuse its credentials. Local start/stop helper scripts are in `tools/` and refuse to take over occupied ports.
 
+Browser smoke tests run on isolated port `3027` and never reuse another running server:
+
+```powershell
+cd frontend
+npm run test:e2e
+```
+
+The local Alpha login smoke test runs when `NEXORA_E2E_ORG`, `NEXORA_E2E_LOGIN`, and `NEXORA_E2E_PASSWORD` are supplied in the shell; without them, that one test is skipped while the offline-sync and PWA checks still run.
+
 ### Source of Truth
 
 1. `docs/architecture/MASTER_BLUEPRINT_v1.md`

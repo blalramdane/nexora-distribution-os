@@ -28,10 +28,10 @@ export default function LoginPage() {
       <div className="brand" style={{color:"var(--navy)"}}>NEXORA <span>Distribution</span></div>
       <h1 style={{marginBottom:6}}>تسجيل الدخول</h1>
       <p className="subtitle">إدارة المخزن، العربيات، المبيعات والرحلات من مكان واحد.</p>
-      <div className="field"><label>Organization ID</label><input value={organizationId} onChange={e=>setOrganizationId(e.target.value)} required placeholder="ULID" /></div>
-      <div className="field"><label>الإيميل أو الهاتف</label><input value={login} onChange={e=>setLogin(e.target.value)} required /></div>
-      <div className="field"><label>كلمة المرور</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} required /></div>
-      <div className="field"><label>اسم الجهاز</label><input value={deviceName} onChange={e=>setDeviceName(e.target.value)} required /></div>
+      <div className="field"><label htmlFor="organization-id">Organization ID</label><input id="organization-id" value={organizationId} onChange={e=>setOrganizationId(e.target.value)} required placeholder="ULID" /></div>
+      <div className="field"><label htmlFor="login">الإيميل أو الهاتف</label><input id="login" value={login} onChange={e=>setLogin(e.target.value)} required /></div>
+      <div className="field"><label htmlFor="password">كلمة المرور</label><input id="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} required /></div>
+      <div className="field"><label htmlFor="device-name">اسم الجهاز</label><input id="device-name" value={deviceName} onChange={e=>setDeviceName(e.target.value)} required /></div>
       {error && <div className="error">{error}</div>}
       <button className="primary" disabled={loading}>{loading?"جارٍ الدخول...":"دخول"}</button>
     </form>

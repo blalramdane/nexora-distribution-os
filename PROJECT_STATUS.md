@@ -85,7 +85,7 @@ These must remain configurable and must not be guessed:
 - 9 database migrations exist for identity, reference data, catalog/parties, locations, transaction infrastructure, commercial documents, distribution/sync/projections, Sanctum tokens, and average cost.
 - API currently exposes 35 routes under `/api/v1`, including login, tenant-protected master data, purchase/sale/payment/return posting, stock adjustments, trip/load/route/settlement, and field sync operations.
 - Backend feature suite: **48 passed, 317 assertions**.
-- Playwright browser E2E: **2 passed** (offline field visit queues locally and syncs after reconnect; Arabic PWA manifest/icon validation). Tests use isolated port 3027 and never reuse an existing server.
+- Playwright browser E2E: **3 passed** (local Alpha login and real dashboard/API, offline field visit queue/reconnect sync, and Arabic PWA manifest/icon validation). Tests use isolated port 3027 and never reuse an existing server.
 - API routes now enforce role permissions across dashboard, catalog, customers, suppliers, inventory, purchases, sales, payments, returns, trips, field visits, and sync. Permissions are scoped to roles owned by the authenticated organization; offline sync additionally checks permission for the specific transaction type before device lookup or replay acknowledgement.
 - Inactive user accounts are rejected by tenant middleware even if a token still exists. Trip creation rejects vehicles, representatives, and origin locations owned by another organization.
 - Added automated tests for permission denial/grant, foreign-organization role isolation and response filtering, offline sync privilege escalation, and cross-tenant trip creation.
