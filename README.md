@@ -26,6 +26,7 @@ The repository contains an implemented **local-alpha foundation**, not a product
 The latest local verification recorded on 2026-10-10:
 
 - Backend feature suite: **56 tests passed, 343 assertions**; 3 MySQL-only composite-FK tests are skipped on local SQLite by design.
+- Latest MySQL 8.4.11 backend gate: **59 passed, 343 assertions**; fresh migration, repeatable seeding, full rollback, re-migration, and final seeding also passed on commit `29a7348` ([run details](https://github.com/blalramdane/nexora-distribution-os/actions/runs/38046598388)).
 - Frontend production build: passed.
 - Frontend TypeScript check (`npm run lint`): passed.
 - Playwright browser E2E: **4 passed**, including Local Alpha login, UI creation of product/customer/supplier, purchase receipt, vehicle loading, trip-linked sale, allocated collection, trip settlement with zero cash/stock variance, invoice-linked sales and purchase returns, field visit check-in/completion, final warehouse stock reconciliation, offline field sync, and PWA installability.
