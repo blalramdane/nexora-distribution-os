@@ -91,6 +91,17 @@ class CustomerMasterTest extends TestCase
             'longitude' => 31.6356,
         ]);
 
+        $this->postJson('/api/v1/customers', [
+            'name' => 'عميل مكرر',
+            'code' => 'CUS-001',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['code']);
+
+        $this->postJson('/api/v1/customers', [
+            'name' => 'إحداثيات خاطئة',
+            'latitude' => 95,
+            'longitude' => 31,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['latitude']);
+
         $this->getJson('/api/v1/customers?q=الزرقا')
             ->assertOk()
             ->assertJsonFragment(['id' => $customerId])
