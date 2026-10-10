@@ -24,8 +24,8 @@ class InventoryController extends Controller
     public function index(Request $request)
     {
         $query=DB::table('stock_balances as sb')
-            ->join('products as p','p.id','=','sb.product_id')
-            ->join('locations as l','l.id','=','sb.location_id')
+            ->join('products as p',function($join){$join->on('p.id','=','sb.product_id')->on('p.organization_id','=','sb.organization_id');})
+            ->join('locations as l',function($join){$join->on('l.id','=','sb.location_id')->on('l.organization_id','=','sb.organization_id');})
             ->where('sb.organization_id',$request->user()->organization_id)
             ->select('sb.*','p.sku','p.name_ar','p.name_en','l.code as location_code','l.name as location_name')
             ->orderBy('p.name_ar');

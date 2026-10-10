@@ -23,6 +23,8 @@ dist/
 .vite/
 *.tsbuildinfo
 /frontend/.npm-cache/
+/frontend/test-results/
+/frontend/playwright-report/
 /frontend/AGENTS.md
 
 # Local tooling

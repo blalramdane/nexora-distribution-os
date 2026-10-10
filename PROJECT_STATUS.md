@@ -85,6 +85,7 @@ These must remain configurable and must not be guessed:
 - 9 database migrations exist for identity, reference data, catalog/parties, locations, transaction infrastructure, commercial documents, distribution/sync/projections, Sanctum tokens, and average cost.
 - API currently exposes 35 routes under `/api/v1`, including login, tenant-protected master data, purchase/sale/payment/return posting, stock adjustments, trip/load/route/settlement, and field sync operations.
 - Backend feature suite: **48 passed, 317 assertions**.
+- Playwright browser E2E: **2 passed** (offline field visit queues locally and syncs after reconnect; Arabic PWA manifest/icon validation). Tests use isolated port 3027 and never reuse an existing server.
 - API routes now enforce role permissions across dashboard, catalog, customers, suppliers, inventory, purchases, sales, payments, returns, trips, field visits, and sync. Permissions are scoped to roles owned by the authenticated organization; offline sync additionally checks permission for the specific transaction type before device lookup or replay acknowledgement.
 - Inactive user accounts are rejected by tenant middleware even if a token still exists. Trip creation rejects vehicles, representatives, and origin locations owned by another organization.
 - Added automated tests for permission denial/grant, foreign-organization role isolation and response filtering, offline sync privilege escalation, and cross-tenant trip creation.
@@ -95,11 +96,11 @@ These must remain configurable and must not be guessed:
 - `tools/start-local.ps1` checks ports 8017/3017 and reuses healthy NEXORA services without taking over other processes. `tools/stop-local.ps1` targets only matching repository-specific commands.
 
 ## Remaining before a controlled pilot
-- A safe, repeatable demo/local bootstrap with a documented login path and sample organization data.
+- The local-only bootstrap and login path are implemented and verified; production-grade tenant onboarding and credential delivery still need implementation.
 - Verify migrations and constraints on the target MySQL 8.4 engine, not SQLite alone.
-- Review/enforce the full permission matrix on every route; test cross-tenant reads/writes across all modules.
+- Expand cross-tenant and permission tests to all remaining resource types and review the final role matrix with the business owner.
 - Verify all UI forms against API contracts, including loading/error states and session expiry.
-- Complete browser E2E tests for purchase → stock → vehicle load → trip sales/collection → settlement and returns.
+- Complete browser E2E tests for purchase → stock → vehicle load → trip sales/collection → settlement and returns. Current browser E2E covers the offline field workflow and PWA manifest.
 - Finish offline PWA install/update behavior, conflict UI, and field-device lifecycle review.
 - Audit ledger, costing, returns, tax/invoice, document numbering, and credit/negative-stock policies with the business owner.
 - Production deployment, secrets, backups/restore drill, observability, rate limits, load tests, and security review.
@@ -107,6 +108,9 @@ These must remain configurable and must not be guessed:
 
 ## Product readiness statement
 **Local Alpha foundation only — not production-ready and not yet approved for live financial/inventory operations.** Do not market it as a finished system until the pilot and release gates pass.
+
+## Environment limitation
+On 2026-10-10, no local MySQL/MariaDB service was found and Docker CLI could not connect to the Docker Desktop engine. The MySQL 8.4 migration gate remains untested; do not infer MySQL compatibility from passing SQLite tests.
 
 ## Important
 The old system is currently unavailable. Do not block development on it. Later, create a migration adapter and reconcile opening balances, inventory and historical transactions.

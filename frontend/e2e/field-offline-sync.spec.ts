@@ -117,6 +117,6 @@ test("field visit queues offline and is acknowledged after reconnect", async ({ 
   await page.evaluate(() => { Object.defineProperty(navigator, "onLine", { configurable: true, value: true }); window.dispatchEvent(new Event("online")); });
   await expect(page.locator(".connection")).toContainText("متصل");
   const request = await syncRequest;
-  console.log("SYNC_REQUEST", request.postData());
+  expect(request.postData()).toContain(queued.operationUuid);
   await expect.poll(() => syncOperationStatus(page), { timeout: 10_000 }).toBe("completed");
 });

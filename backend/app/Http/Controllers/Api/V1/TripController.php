@@ -20,9 +20,9 @@ class TripController extends Controller
     private function routeCustomers(string $org,string $trip): \Illuminate\Support\Collection
     {
         return DB::table('trip_customers as tc')
-            ->join('customers as c','c.id','=','tc.customer_id')
+            ->join('customers as c',function($join){$join->on('c.id','=','tc.customer_id')->on('c.organization_id','=','tc.organization_id');})
             ->leftJoin('customer_addresses as ca',function($join){
-                $join->on('ca.customer_id','=','c.id')->where('ca.is_primary',true)->where('ca.active',true);
+                $join->on('ca.customer_id','=','c.id')->on('ca.organization_id','=','c.organization_id')->where('ca.is_primary',true)->where('ca.active',true);
             })
             ->where('tc.organization_id',$org)->where('tc.trip_id',$trip)
             ->select('tc.id as trip_customer_id','tc.customer_id','tc.sequence','tc.visit_status','c.code','c.name','c.phone','c.address_text','c.governorate_id','c.center_id','c.city_area_id','ca.latitude','ca.longitude','ca.address_text as primary_address')
@@ -32,7 +32,7 @@ class TripController extends Controller
     public function index(Request $request)
     {
         $org=$request->user()->organization_id;
-        return response()->json(DB::table('trips as t')->join('vehicles as v','v.id','=','t.vehicle_id')->join('users as u','u.id','=','t.rep_user_id')->where('t.organization_id',$org)->select('t.*','v.name as vehicle_name','v.code as vehicle_code','u.name as rep_name')->orderByDesc('t.trip_date')->limit(100)->get());
+        return response()->json(DB::table('trips as t')->join('vehicles as v',function($join){$join->on('v.id','=','t.vehicle_id')->on('v.organization_id','=','t.organization_id');})->join('users as u',function($join){$join->on('u.id','=','t.rep_user_id')->on('u.organization_id','=','t.organization_id');})->where('t.organization_id',$org)->select('t.*','v.name as vehicle_name','v.code as vehicle_code','u.name as rep_name')->orderByDesc('t.trip_date')->limit(100)->get());
     }
 
     public function vehicles(Request $request){return response()->json(DB::table('vehicles')->where('organization_id',$request->user()->organization_id)->where('active',true)->orderBy('name')->get());}
@@ -62,7 +62,7 @@ class TripController extends Controller
         abort_unless($row,404);
         $location=DB::table('vehicles')->where('organization_id',$org)->where('id',$row->vehicle_id)->value('location_id');
         $productIds=DB::table('stock_movements')->where('organization_id',$org)->where('trip_id',$trip)->distinct()->pluck('product_id');
-        return response()->json(DB::table('stock_balances as s')->join('products as p','p.id','=','s.product_id')->where('s.organization_id',$org)->where('s.location_id',$location)->whereIn('s.product_id',$productIds)->select('p.id as product_id','p.sku','p.name_ar','s.quantity_base','s.average_cost')->orderBy('p.name_ar')->get());
+        return response()->json(DB::table('stock_balances as s')->join('products as p',function($join){$join->on('p.id','=','s.product_id')->on('p.organization_id','=','s.organization_id');})->where('s.organization_id',$org)->where('s.location_id',$location)->whereIn('s.product_id',$productIds)->select('p.id as product_id','p.sku','p.name_ar','s.quantity_base','s.average_cost')->orderBy('p.name_ar')->get());
     }
 
     public function assignCustomer(Request $request,string $trip)

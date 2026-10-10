@@ -44,14 +44,14 @@ function Start-IsolatedService([int] $Port, [string] $Url, [string] $Name, [stri
     Write-Host "$Name launch requested (PID $($process.Id)); log: $stdout"
 }
 
-Start-IsolatedService -Port 8017 -Url 'http://127.0.0.1:8017/api/v1/health' -Name 'NEXORA API' -Executable $php -Arguments @('-c', $ini, 'artisan', 'serve', '--host=127.0.0.1', '--port=8017') -WorkingDirectory $backend -LogPrefix 'local-serve'
+Start-IsolatedService -Port 8017 -Url 'http://127.0.0.1:8017/api/v1/health' -Name 'NEXORA API' -Executable $php -Arguments @('-c', ('"{0}"' -f $ini), 'artisan', 'serve', '--host=127.0.0.1', '--port=8017') -WorkingDirectory $backend -LogPrefix 'local-serve'
 Start-IsolatedService -Port 3017 -Url 'http://127.0.0.1:3017' -Name 'NEXORA Frontend' -Executable $npm -Arguments @('run', 'dev', '--', '--hostname', '127.0.0.1', '--port', '3017') -WorkingDirectory $frontend -LogPrefix 'local-serve'
 
 Start-Sleep -Seconds 2
 Write-Host "Frontend: http://127.0.0.1:3017" -ForegroundColor Cyan
 Write-Host "API health: http://127.0.0.1:8017/api/v1/health" -ForegroundColor Cyan
 if (!(Test-NexoraEndpoint 'http://127.0.0.1:8017/api/v1/health')) {
-    Write-Warning 'API has not passed its health check yet. Inspect backend/storage/logs/local-serve.*.log.'
+    Write-Warning "API has not passed its health check yet. Inspect $(Join-Path $backend 'local-serve.err.log') and local-serve.out.log."
 }
 if (!(Test-NexoraEndpoint 'http://127.0.0.1:3017')) {
     Write-Warning 'Frontend has not returned HTTP 200 yet. Inspect frontend/local-serve.*.log.'
