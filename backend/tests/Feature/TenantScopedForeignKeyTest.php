@@ -13,6 +13,15 @@ class TenantScopedForeignKeyTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        if (DB::getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Composite tenant foreign keys are enforced and verified on the target MySQL 8.4 engine.');
+        }
+    }
+
     public function test_database_rejects_trip_customer_assignment_across_organizations(): void
     {
         [$orgA, $orgB] = $this->organizations();
