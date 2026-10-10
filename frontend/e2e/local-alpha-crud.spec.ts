@@ -189,7 +189,17 @@ test("local Alpha can create master data, post a purchase, and reconcile a sale 
   await expect(page.getByLabel(`رصيد التسوية ${productName}`)).toHaveValue("2");
   const expenseAccount = page.getByLabel("الحساب المالي للمصروف");
   await expect(expenseAccount.locator("option").filter({ hasText: "الخزنة التجريبية" })).toHaveCount(1);
-  await expenseAccount.selectOption({ label: "الخزنة التجريبية" });
+  const expenseAccountState = await expenseAccount.evaluate((element) => {
+    const select = element as HTMLSelectElement;
+    return {
+      disabled: select.disabled,
+      value: select.value,
+      optionCount: select.options.length,
+      selectedTripValue: document.querySelectorAll("select")[2]?.value ?? "",
+    };
+  });
+  expect(expenseAccountState.disabled, `Trip expense account selector stayed disabled: ${JSON.stringify(expenseAccountState)}`).toBe(false);
+  await expenseAccount.selectOption({ label: "الخزنة التجريبية — DEMO-CASH" });
   await page.getByLabel("نوع المصروف").fill("وقود E2E");
   await page.getByLabel("قيمة المصروف").fill("5.00");
   await page.getByRole("button", { name: "تسجيل مصروف الرحلة" }).click();
