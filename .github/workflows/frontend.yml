@@ -107,3 +107,18 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm run test:e2e
+      - name: Print redacted Playwright failure context
+        if: failure()
+        working-directory: frontend
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          for path in sorted(Path("test-results").rglob("error-context.md")):
+              content = path.read_text(errors="replace")
+              # Avoid accidentally printing secrets if a future test includes sensitive form data.
+              content = re.sub(r"(?im)^.*(?:password|authorization|access[_ -]?token|refresh[_ -]?token).*$", "[REDACTED SENSITIVE LINE]", content)
+              print(f"\n--- Playwright context: {path} ---")
+              print(content[-18000:])
+          PY
