@@ -13,7 +13,7 @@ use Illuminate\Support\Str;
 
 class BootstrapLocalAlpha extends Command
 {
-    protected $signature = 'nexora:local-alpha';
+    protected $signature = 'nexora:local-alpha {--reset-password : Rotate the local demo admin password and rewrite the ignored credentials file}';
 
     protected $description = 'Create a local-only NEXORA Distribution Alpha organization and starter master data';
 
@@ -42,7 +42,9 @@ class BootstrapLocalAlpha extends Command
         $email = 'admin@local.nexora.test';
         $credentialPath = dirname(base_path()).DIRECTORY_SEPARATOR.'.local-alpha-credentials.txt';
 
-        DB::transaction(function () use (&$plainPassword, &$organization, $email, $credentialPath): void {
+        $resetPassword = (bool) $this->option('reset-password');
+
+        DB::transaction(function () use (&$plainPassword, &$organization, $email, $credentialPath, $resetPassword): void {
             app(DatabaseSeeder::class)->run();
 
             $organization = Organization::query()->firstOrCreate(
@@ -71,7 +73,7 @@ class BootstrapLocalAlpha extends Command
                     'password' => $plainPassword,
                     'status' => 'active',
                 ]);
-            } elseif (! is_file($credentialPath)) {
+            } elseif ($resetPassword || ! is_file($credentialPath)) {
                 // Recover a lost local-demo password once, without touching any other account.
                 $plainPassword = Str::password(24);
                 $user->forceFill(['password' => $plainPassword])->save();
