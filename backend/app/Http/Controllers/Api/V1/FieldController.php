@@ -17,7 +17,10 @@ class FieldController extends Controller{
  }
  public function visit(Request $request){
   $data=$request->validate(['trip_id'=>['required','string','size:26'],'customer_id'=>['required','string','size:26'],'status'=>['required','in:checked_in,visited,skipped'],'latitude'=>['nullable','numeric'],'longitude'=>['nullable','numeric'],'notes'=>['nullable','string']]);
-  $org=$request->user()->organization_id;$existing=DB::table('customer_visits')->where('organization_id',$org)->where('trip_id',$data['trip_id'])->where('customer_id',$data['customer_id'])->where('user_id',$request->user()->id)->latest('created_at')->first();
+  $org=$request->user()->organization_id;$userId=$request->user()->id;
+  abort_unless(DB::table('trips')->where('id',$data['trip_id'])->where('organization_id',$org)->where('rep_user_id',$userId)->whereNotIn('status',['completed','cancelled'])->exists(),404);
+  abort_unless(DB::table('trip_customers as tc')->join('customers as c','c.id','=','tc.customer_id')->where('tc.organization_id',$org)->where('tc.trip_id',$data['trip_id'])->where('tc.customer_id',$data['customer_id'])->where('c.organization_id',$org)->exists(),404);
+  $existing=DB::table('customer_visits')->where('organization_id',$org)->where('trip_id',$data['trip_id'])->where('customer_id',$data['customer_id'])->where('user_id',$userId)->latest('created_at')->first();
   $now=now();
   if($existing){DB::table('customer_visits')->where('id',$existing->id)->update(['status'=>$data['status'],'check_in_at'=>$data['status']==='checked_in'?($existing->check_in_at?:$now):$existing->check_in_at,'check_out_at'=>in_array($data['status'],['visited','skipped'],true)?$now:$existing->check_out_at,'latitude'=>$data['latitude']??$existing->latitude,'longitude'=>$data['longitude']??$existing->longitude,'notes'=>$data['notes']??$existing->notes,'updated_at'=>$now]);}
   else DB::table('customer_visits')->insert(['id'=>(string)Str::ulid(),'organization_id'=>$org,'trip_id'=>$data['trip_id'],'customer_id'=>$data['customer_id'],'user_id'=>$request->user()->id,'status'=>$data['status'],'check_in_at'=>$data['status']==='checked_in'?$now:null,'check_out_at'=>in_array($data['status'],['visited','skipped'],true)?$now:null,'latitude'=>$data['latitude']??null,'longitude'=>$data['longitude']??null,'notes'=>$data['notes']??null,'created_at'=>$now,'updated_at'=>$now]);
