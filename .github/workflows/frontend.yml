@@ -83,9 +83,9 @@ jobs:
 
           # Validate demo credentials without printing or logging the password or bearer token.
           credential_file=../.local-alpha-credentials.txt
-          organization_id="$(sed -n 's/^Organization ID: //p' "$credential_file" | head -n 1)"
-          login_email="$(sed -n 's/^Login email: //p' "$credential_file" | head -n 1)"
-          login_password="$(sed -n 's/^Password: //p' "$credential_file" | head -n 1)"
+          organization_id="$(sed -n 's/^Organization ID: //p' "$credential_file" | head -n 1 | tr -d '\r')"
+          login_email="$(sed -n 's/^Login email: //p' "$credential_file" | head -n 1 | tr -d '\r')"
+          login_password="$(sed -n 's/^Password: //p' "$credential_file" | head -n 1 | tr -d '\r')"
           if [ -z "$organization_id" ] || [ -z "$login_email" ] || [ -z "$login_password" ]; then
             echo "Local Alpha credentials file is incomplete."
             exit 1
