@@ -177,6 +177,7 @@ final class TransactionPostingService
                 'occurred_at'=>now(),'posted_at'=>now(),'created_by'=>$data['created_by'] ?? null,'device_id'=>$data['device_id'] ?? null,'reference'=>$documentNumber,
                 'created_at'=>now(),'updated_at'=>now(),
             ]);
+            DB::table('stock_movements')->where('id',$movementId)->update(['reference'=>substr($documentNumber.' | '.$data['reason'],0,255),'updated_at'=>now()]);
             $result=['id'=>$movementId,'document_number'=>$documentNumber,'product_id'=>$product->id,'location_id'=>$location->id,'quantity_delta'=>$delta,'balance_after'=>$newQty,'status'=>'posted'];
             $this->completeIdempotency($organizationId,'stock.adjust',$data['idempotency_key'] ?? null,'stock_adjustment:'.$movementId);
             return $result;
