@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PackageCheck, RotateCcw, Search } from "lucide-react";
+import { PackageCheck, RotateCcw } from "lucide-react";
 import { api } from "@/lib/api";
 
 type Party = { id: string; name: string; code: string };
-type Location = { id: string; name: string; code: string };
+type Location = { id: string; name: string; code: string; type?: string };
 type Invoice = { id: string; document_number: string; invoice_date: string; total: number; paid_amount: number; balance_due: number; trip_id?: string | null };
 type InvoiceItem = {
   id: string;
@@ -191,5 +191,173 @@ export default function Returns() {
       {message && <div role="status" className="badge blue" style={{ display: "block", marginTop: 10, padding: 10, whiteSpace: "normal" }}>{message}</div>}
       <button className="primary" onClick={post} disabled={saving || loadingMaster || loadingItems || !invoiceId || !returnLines.length} style={{ marginTop: 12, display: "flex", justifyContent: "center", gap: 8 }}><PackageCheck size={16} />{saving ? "جاري تسجيل المرتجع..." : "تسجيل المرتجع المرتبط بالفاتورة"}</button>
     </section>
+    <PurchaseReturnsPanel />
   </main>;
+}
+
+type PurchaseInvoice = { id: string; document_number: string; invoice_date: string; total: number };
+type PurchaseInvoiceItem = {
+  id: string;
+  product_id: string;
+  product_name_snapshot: string;
+  sku_snapshot: string;
+  entered_quantity: number;
+  quantity_base: number;
+  conversion_factor_snapshot: number;
+  unit_cost_entered: number;
+  returned_quantity_base: number;
+  remaining_quantity_base: number;
+};
+type PurchaseReturnLine = { item: PurchaseInvoiceItem; quantity: string };
+
+function PurchaseReturnsPanel() {
+  const [suppliers, setSuppliers] = useState<Party[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [supplierId, setSupplierId] = useState("");
+  const [locationId, setLocationId] = useState("");
+  const [invoices, setInvoices] = useState<PurchaseInvoice[]>([]);
+  const [invoiceId, setInvoiceId] = useState("");
+  const [lines, setLines] = useState<PurchaseReturnLine[]>([]);
+  const [loadingMaster, setLoadingMaster] = useState(true);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [loadingItems, setLoadingItems] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    Promise.all([api<Party[]>("/suppliers"), api<Location[]>("/locations")])
+      .then(([supplierRows, locationRows]) => {
+        setSuppliers(supplierRows);
+        setLocations(locationRows);
+        setLocationId(locationRows.find((item) => item.code === "WH-MAIN")?.id || locationRows[0]?.id || "");
+      })
+      .catch((e) => setError((e as Error).message))
+      .finally(() => setLoadingMaster(false));
+  }, []);
+
+  useEffect(() => {
+    setInvoiceId("");
+    setInvoices([]);
+    setLines([]);
+    if (!supplierId) return;
+    setLoadingInvoices(true);
+    setError("");
+    api<PurchaseInvoice[]>(`/purchases/history?supplier_id=${encodeURIComponent(supplierId)}`)
+      .then(setInvoices)
+      .catch((e) => setError((e as Error).message))
+      .finally(() => setLoadingInvoices(false));
+  }, [supplierId]);
+
+  useEffect(() => {
+    setLines([]);
+    if (!invoiceId) return;
+    setLoadingItems(true);
+    setError("");
+    api<PurchaseInvoiceItem[]>(`/purchases/invoices/${encodeURIComponent(invoiceId)}/items`)
+      .then((items) => setLines(items.map((item) => ({ item, quantity: "0" }))))
+      .catch((e) => setError((e as Error).message))
+      .finally(() => setLoadingItems(false));
+  }, [invoiceId]);
+
+  const selectedInvoice = invoices.find((invoice) => invoice.id === invoiceId);
+  const selectedLines = lines.filter((line) => Number(line.quantity) > 0);
+  const total = selectedLines.reduce((sum, line) => sum + Number(line.quantity) * Number(line.item.unit_cost_entered), 0);
+
+  const refreshItems = async (id: string) => {
+    const result = await api<PurchaseInvoiceItem[]>(`/purchases/invoices/${encodeURIComponent(id)}/items`);
+    setLines(result.map((item) => ({ item, quantity: "0" })));
+  };
+
+  const submit = async () => {
+    if (!supplierId || !locationId || !invoiceId || !selectedInvoice) {
+      setMessage("اختار المورد وفاتورة الشراء الأصلية وموقع الصرف.");
+      return;
+    }
+    if (!selectedLines.length) {
+      setMessage("حدد كمية مرتجعة أكبر من صفر لصنف واحد على الأقل.");
+      return;
+    }
+    if (selectedLines.some((line) => {
+      const factor = Number(line.item.conversion_factor_snapshot || 1);
+      const remainingEntered = Number(line.item.remaining_quantity_base) / factor;
+      return !Number.isFinite(Number(line.quantity)) || Number(line.quantity) <= 0 || Number(line.quantity) > remainingEntered + 0.000001;
+    })) {
+      setMessage("إحدى الكميات تتجاوز الكمية المتبقية من فاتورة الشراء الأصلية.");
+      return;
+    }
+
+    setSaving(true);
+    setMessage("");
+    setError("");
+    try {
+      const result = await api<{ document_number: string; total: string }>("/returns/purchases", {
+        method: "POST",
+        body: JSON.stringify({
+          supplier_id: supplierId,
+          location_id: locationId,
+          original_purchase_invoice_id: invoiceId,
+          idempotency_key: crypto.randomUUID(),
+          items: selectedLines.map((line) => ({
+            product_id: line.item.product_id,
+            quantity: Number(line.quantity),
+            conversion_factor: Number(line.item.conversion_factor_snapshot || 1),
+            unit_cost: Number(line.item.unit_cost_entered),
+            original_purchase_invoice_item_id: line.item.id,
+          })),
+        }),
+      });
+      setMessage(`تم تسجيل مرتجع المشتريات ${result.document_number} بقيمة ${Number(result.total).toLocaleString("ar-EG")} EGP وتحديث المخزون وحساب المورد.`);
+      try {
+        await Promise.all([
+          refreshItems(invoiceId),
+          api<PurchaseInvoice[]>(`/purchases/history?supplier_id=${encodeURIComponent(supplierId)}`).then(setInvoices),
+        ]);
+      } catch {
+        setError("تم تسجيل المرتجع بنجاح، لكن تعذر تحديث بيانات الفاتورة. حدّث الصفحة للتحقق من الرصيد.");
+      }
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return <section className="card" style={{ marginTop: 16 }}>
+    <div className="topbar" style={{ marginBottom: 12 }}>
+      <div><h2 className="title" style={{ fontSize: 18 }}>مرتجع مشتريات للمورد</h2><div className="subtitle">اربط المرتجع بفاتورة التوريد الأصلية، وسيتم رفض أي كمية أعلى من المستلم.</div></div>
+      <span className="badge amber">Purchase Return</span>
+    </div>
+    {loadingMaster && <div role="status" className="badge blue" style={{ display: "block", padding: 10 }}>جاري تحميل الموردين والمخازن...</div>}
+    {error && <div role="alert" className="badge red" style={{ display: "block", padding: 10, whiteSpace: "normal" }}>{error}</div>}
+    <div className="form-grid">
+      <label>المورد<select aria-label="مورد المرتجع" value={supplierId} onChange={(e) => setSupplierId(e.target.value)} disabled={loadingMaster || saving}>
+        <option value="">اختار المورد...</option>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name} — {supplier.code}</option>)}
+      </select></label>
+      <label>المخزن<select aria-label="مخزن مرتجع المشتريات" value={locationId} onChange={(e) => setLocationId(e.target.value)} disabled={loadingMaster || saving}>
+        <option value="">اختار المخزن...</option>{locations.filter((location) => location.type === "warehouse").map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+      </select></label>
+      <label style={{ gridColumn: "1 / -1" }}>فاتورة الشراء الأصلية<select aria-label="فاتورة الشراء الأصلية" value={invoiceId} onChange={(e) => setInvoiceId(e.target.value)} disabled={!supplierId || loadingInvoices || saving}>
+        <option value="">اختار فاتورة الشراء...</option>{invoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.document_number} — {invoice.invoice_date} — {Number(invoice.total).toLocaleString("ar-EG")} EGP</option>)}
+      </select></label>
+    </div>
+    {loadingInvoices && <div role="status" style={{ marginTop: 10 }}>جاري تحميل فواتير المورد...</div>}
+    {supplierId && !loadingInvoices && !invoices.length && <div className="badge amber" style={{ display: "block", marginTop: 10, padding: 10 }}>لا توجد فواتير شراء مسجلة لهذا المورد.</div>}
+    {selectedInvoice && <div className="card" style={{ marginTop: 12, padding: 12, background: "#f8fafc" }}>
+      <div className="panel-title"><span>بنود {selectedInvoice.document_number}</span><span className="badge blue">القيمة الأصلية {Number(selectedInvoice.total).toLocaleString("ar-EG")} EGP</span></div>
+      {loadingItems && <div role="status">جاري تحميل البنود...</div>}
+      {!loadingItems && !lines.length && <div style={{ color: "#64748b", padding: 10 }}>تم إرجاع كل الكميات المتاحة من هذه الفاتورة.</div>}
+      {lines.map((line) => {
+        const remainingEntered = Number(line.item.remaining_quantity_base) / Number(line.item.conversion_factor_snapshot || 1);
+        return <div key={line.item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 100px 100px", gap: 10, alignItems: "center", padding: "10px 0", borderBottom: "1px solid #e2e8f0" }}>
+          <span><strong>{line.item.product_name_snapshot}</strong><small style={{ display: "block", color: "#64748b" }}>{line.item.sku_snapshot} · متبقي {remainingEntered.toLocaleString("ar-EG")}</small></span>
+          <label>الكمية<input aria-label={`كمية مرتجع مشتريات ${line.item.product_name_snapshot}`} type="number" min="0" max={remainingEntered} step="any" value={line.quantity} onChange={(e) => setLines((items) => items.map((item) => item.item.id === line.item.id ? { ...item, quantity: e.target.value } : item))} disabled={saving || loadingItems} /></label>
+          <span style={{ textAlign: "left" }}>{(Number(line.quantity || 0) * Number(line.item.unit_cost_entered)).toLocaleString("ar-EG")} EGP</span>
+        </div>;
+      })}
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}><span>قيمة المرتجع</span><strong>{total.toLocaleString("ar-EG")} EGP</strong></div>
+    </div>}
+    {message && <div role="status" className="badge blue" style={{ display: "block", marginTop: 12, padding: 10, whiteSpace: "normal" }}>{message}</div>}
+    <button className="primary" onClick={submit} disabled={saving || loadingMaster || loadingItems || !invoiceId || !selectedLines.length} style={{ marginTop: 12, width: "100%" }}><PackageCheck size={16} /> {saving ? "جاري التسجيل..." : "تسجيل مرتجع المشتريات"}</button>
+  </section>;
 }

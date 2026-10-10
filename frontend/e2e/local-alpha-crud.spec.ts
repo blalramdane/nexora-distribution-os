@@ -126,6 +126,22 @@ test("local Alpha can create master data, post a purchase, and reconcile a sale 
   await page.getByRole("button", { name: "إضافة للرحلة" }).click();
   await expect(page.getByText("تم إضافة العميل للرحلة.")).toBeVisible();
 
+  // The assigned field representative must be able to check in and complete the visit.
+  await page.goto("/field");
+  const fieldStop = page.locator(".customer-stop").filter({ hasText: customerName });
+  await expect(fieldStop).toBeVisible();
+  const checkInResponsePromise = page.waitForResponse((response) => response.url().includes("/api/v1/field/visits") && response.request().method() === "POST");
+  await fieldStop.getByRole("button", { name: "وصول" }).click();
+  expect((await checkInResponsePromise).ok()).toBeTruthy();
+  await expect(page.getByText("تم تحديث الزيارة")).toBeVisible();
+  const visitCompleteResponsePromise = page.waitForResponse((response) => response.url().includes("/api/v1/field/visits") && response.request().method() === "POST");
+  await fieldStop.getByRole("button", { name: "تمت" }).click();
+  expect((await visitCompleteResponsePromise).ok()).toBeTruthy();
+  await expect(fieldStop).toContainText("تمت");
+  await expect(page.getByText("تم تحديث الزيارة")).toBeVisible();
+
+  await page.goto("/trips");
+  await page.locator("select").nth(2).selectOption(trip.id);
   await page.getByPlaceholder("ابحث بالصنف أو SKU للتحميل...").fill(sku);
   await page.getByRole("button").filter({ hasText: sku }).last().click();
   await page.getByLabel(`كمية تحميل ${productName}`).fill("3");
@@ -206,10 +222,32 @@ test("local Alpha can create master data, post a purchase, and reconcile a sale 
   await expect(page.getByText(/تم تسجيل المرتجع/)).toBeVisible();
   await expect(page.getByText("تم إرجاع كل البنود القابلة للإرجاع من هذه الفاتورة.")).toBeVisible();
 
+  // Return another unit to the supplier against the original purchase invoice.
+  const purchaseReturnSupplier = page.getByLabel("مورد المرتجع");
+  await expect(purchaseReturnSupplier.locator("option").filter({ hasText: supplierName })).toHaveCount(1);
+  const purchaseReturnSupplierId = await purchaseReturnSupplier.locator("option").evaluateAll((options, name) => {
+    const match = options.find((option) => option.textContent?.includes(String(name)));
+    return (match as HTMLOptionElement | undefined)?.value ?? "";
+  }, supplierName);
+  expect(purchaseReturnSupplierId).toBeTruthy();
+  await purchaseReturnSupplier.selectOption(purchaseReturnSupplierId);
+  await page.getByLabel("مخزن مرتجع المشتريات").selectOption(warehouseValue);
+
+  const purchaseReturnInvoice = page.getByLabel("فاتورة الشراء الأصلية");
+  await expect(purchaseReturnInvoice.locator("option").filter({ hasText: supplierName })).toHaveCount(0);
+  await expect(purchaseReturnInvoice.locator("option").filter({ hasText: sku })).toHaveCount(0);
+  await expect(purchaseReturnInvoice.locator("option").nth(1)).toContainText(/PI\d+/);
+  await purchaseReturnInvoice.selectOption({ index: 1 });
+  const purchaseReturnQuantity = page.getByLabel(`كمية مرتجع مشتريات ${productName}`);
+  await expect(purchaseReturnQuantity).toHaveValue("0");
+  await purchaseReturnQuantity.fill("1");
+  await page.getByRole("button", { name: "تسجيل مرتجع المشتريات" }).click();
+  await expect(page.getByText(/تم تسجيل مرتجع المشتريات/)).toBeVisible();
+
   await page.goto("/inventory");
   await page.getByPlaceholder("SKU / اسم الصنف / الموقع...").fill(sku);
   const returnedRows = page.getByRole("row").filter({ hasText: sku });
   await expect(returnedRows).toHaveCount(2);
   const returnedQuantities = await returnedRows.locator("td:nth-child(4)").allTextContents();
-  expect(returnedQuantities.map((value) => value.trim().replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit))).trim()).sort()).toEqual(["2", "3"]);
+  expect(returnedQuantities.map((value) => value.trim().replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit))).trim()).sort()).toEqual(["2", "2"]);
 });

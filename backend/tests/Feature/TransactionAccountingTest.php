@@ -615,6 +615,145 @@ class TransactionAccountingTest extends TestCase
         );
     }
 
+    public function test_purchase_return_cannot_exceed_the_original_received_quantity_across_repeated_lines(): void
+    {
+        [$organization, $user, $unitId, $productId, $customerId, $locationId] = $this->foundation();
+
+        $supplierId = (string) Str::ulid();
+        DB::table('suppliers')->insert([
+            'id' => $supplierId,
+            'organization_id' => $organization->id,
+            'code' => 'SUP-OVERRETURN',
+            'name' => 'Supplier Over-return Test',
+            'normalized_name' => 'supplier over-return test',
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $service = app(TransactionPostingService::class);
+        $purchase = $service->postPurchase($organization->id, [
+            'supplier_id' => $supplierId,
+            'location_id' => $locationId,
+            'items' => [[
+                'product_id' => $productId,
+                'quantity' => 2,
+                'conversion_factor' => 1,
+                'unit_cost' => 50,
+                'unit_id' => $unitId,
+            ]],
+            'created_by' => $user->id,
+        ]);
+
+        $purchaseItemId = DB::table('purchase_invoice_items')
+            ->where('purchase_invoice_id', $purchase['id'])
+            ->value('id');
+
+        try {
+            $service->postPurchaseReturn($organization->id, [
+                'supplier_id' => $supplierId,
+                'location_id' => $locationId,
+                'original_purchase_invoice_id' => $purchase['id'],
+                'items' => [
+                    [
+                        'product_id' => $productId,
+                        'quantity' => 1.5,
+                        'conversion_factor' => 1,
+                        'unit_cost' => 50,
+                        'original_purchase_invoice_item_id' => $purchaseItemId,
+                    ],
+                    [
+                        'product_id' => $productId,
+                        'quantity' => 1,
+                        'conversion_factor' => 1,
+                        'unit_cost' => 50,
+                        'original_purchase_invoice_item_id' => $purchaseItemId,
+                    ],
+                ],
+                'idempotency_key' => 'purchase-over-return-'.$organization->id,
+                'created_by' => $user->id,
+            ]);
+
+            $this->fail('The total returned quantity must not exceed the original received quantity.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('items', $exception->errors());
+        }
+
+        $this->assertDatabaseCount('purchase_returns', 0);
+        $this->assertDatabaseCount('purchase_return_items', 0);
+        $this->assertSame(
+            '2.000000',
+            number_format((float) DB::table('stock_balances')
+                ->where('organization_id', $organization->id)
+                ->where('product_id', $productId)
+                ->where('location_id', $locationId)
+                ->value('quantity_base'), 6, '.', '')
+        );
+    }
+
+    public function test_purchase_return_uses_original_conversion_snapshot_instead_of_client_value(): void
+    {
+        [$organization, $user, $unitId, $productId, $customerId, $locationId] = $this->foundation();
+
+        $supplierId = (string) Str::ulid();
+        DB::table('suppliers')->insert([
+            'id' => $supplierId,
+            'organization_id' => $organization->id,
+            'code' => 'SUP-CONVERSION',
+            'name' => 'Supplier Conversion Test',
+            'normalized_name' => 'supplier conversion test',
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $service = app(TransactionPostingService::class);
+        $purchase = $service->postPurchase($organization->id, [
+            'supplier_id' => $supplierId,
+            'location_id' => $locationId,
+            'items' => [[
+                'product_id' => $productId,
+                'quantity' => 2,
+                'conversion_factor' => 1,
+                'unit_cost' => 50,
+                'unit_id' => $unitId,
+            ]],
+            'created_by' => $user->id,
+        ]);
+        $purchaseItemId = DB::table('purchase_invoice_items')->where('purchase_invoice_id', $purchase['id'])->value('id');
+
+        try {
+            $service->postPurchaseReturn($organization->id, [
+                'supplier_id' => $supplierId,
+                'location_id' => $locationId,
+                'original_purchase_invoice_id' => $purchase['id'],
+                'items' => [[
+                    'product_id' => $productId,
+                    'quantity' => 3,
+                    'conversion_factor' => 0.1,
+                    'unit_cost' => 1,
+                    'original_purchase_invoice_item_id' => $purchaseItemId,
+                ]],
+                'idempotency_key' => 'purchase-return-conversion-'.$organization->id,
+                'created_by' => $user->id,
+            ]);
+
+            $this->fail('The client must not reduce the conversion factor to return more entered units than received.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('items', $exception->errors());
+        }
+
+        $this->assertDatabaseCount('purchase_returns', 0);
+        $this->assertSame(
+            '2.000000',
+            number_format((float) DB::table('stock_balances')
+                ->where('organization_id', $organization->id)
+                ->where('product_id', $productId)
+                ->where('location_id', $locationId)
+                ->value('quantity_base'), 6, '.', '')
+        );
+    }
+
     private function assertTransactionBalanced(string $organizationId, string $sourceType, string $sourceId): void
     {
         $totals = DB::table('ledger_entries')

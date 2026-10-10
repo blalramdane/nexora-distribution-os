@@ -46,6 +46,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/inventory/adjust', [InventoryController::class, 'adjust'])->middleware('permission:inventory.adjust');
         Route::get('/locations', [LocationController::class, 'index'])->middleware('permission:inventory.view');
         Route::post('/purchases', [PurchaseController::class, 'store'])->middleware('permission:purchases.post');
+        Route::get('/purchases/history', [PurchaseController::class, 'history'])->middleware('permission:purchases.post');
+        Route::get('/purchases/invoices/{invoiceId}/items', [PurchaseController::class, 'invoiceItems'])->middleware('permission:purchases.post');
         Route::post('/sales', [SalesController::class, 'store'])->middleware('permission:sales.post');
         Route::post('/payments', [PaymentController::class, 'store'])->middleware('permission:payments.record');
         Route::post('/returns/sales', [ReturnController::class, 'sales'])->middleware('permission:sales.post');

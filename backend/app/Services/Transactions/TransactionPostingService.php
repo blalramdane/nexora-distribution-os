@@ -534,6 +534,11 @@ final class TransactionPostingService
                 if(!$original || $original->product_id !== $product->id){
                     throw ValidationException::withMessages(['items'=>['Original sales invoice item is invalid.']]);
                 }
+                // Trust the original invoice snapshot, never client-supplied unit economics.
+                $conversion=(string)$original->conversion_factor_snapshot;
+                $qtyBase=bcmul($qty,$conversion,6);
+                $unitPrice=(string)$original->unit_price_entered;
+                $lineTotal=bcmul($qty,$unitPrice,4);
                 $returned=DB::table('sales_return_items')->where('organization_id',$organizationId)->where('original_sales_invoice_item_id',$original->id)->sum('quantity_base');
                 $pendingReturned = $pendingReturnedByLine[$original->id] ?? '0.000000';
                 $alreadyReturned = bcadd((string)$returned, $pendingReturned, 6);
@@ -638,10 +643,27 @@ final class TransactionPostingService
             $supplier=DB::table('suppliers')->where('organization_id',$organizationId)->where('id',$data['supplier_id'])->where('active',true)->firstOrFail();
             $location=DB::table('locations')->where('organization_id',$organizationId)->where('id',$data['location_id'])->where('status','active')->firstOrFail();
 
+            if (empty($data['original_purchase_invoice_id'])) {
+                throw ValidationException::withMessages(['original_purchase_invoice_id' => ['The original purchase invoice is required for a return.']]);
+            }
+
+            $originalInvoice=DB::table('purchase_invoices')
+                ->where('organization_id',$organizationId)
+                ->where('id',$data['original_purchase_invoice_id'])
+                ->where('supplier_id',$supplier->id)
+                ->where('status','posted')
+                ->lockForUpdate()
+                ->first();
+
+            if (!$originalInvoice) {
+                throw ValidationException::withMessages(['original_purchase_invoice_id' => ['The original invoice is not a posted invoice for this supplier.']]);
+            }
+
             $returnId=(string)Str::ulid();
             $documentNumber=$this->nextDocumentNumber($organizationId,'purchase_return','PR');
             $subtotal='0.0000';
             $items=[];
+            $pendingReturnedByLine=[];
 
             foreach($data['items'] as $line){
                 $product=DB::table('products')->where('organization_id',$organizationId)->where('id',$line['product_id'])->where('active',true)->firstOrFail();
@@ -651,6 +673,32 @@ final class TransactionPostingService
                 $unitCost=(string)$line['unit_cost'];
                 $lineTotal=bcmul($qty,$unitCost,4);
 
+                if (empty($line['original_purchase_invoice_item_id'])) {
+                    throw ValidationException::withMessages(['items' => ['Every returned item must reference a line on the original purchase invoice.']]);
+                }
+
+                $original=DB::table('purchase_invoice_items')
+                    ->where('organization_id',$organizationId)
+                    ->where('purchase_invoice_id',$originalInvoice->id)
+                    ->where('id',$line['original_purchase_invoice_item_id'])
+                    ->lockForUpdate()
+                    ->first();
+                if (!$original || $original->product_id !== $product->id) {
+                    throw ValidationException::withMessages(['items' => ['Original purchase invoice item is invalid.']]);
+                }
+                // The supplier's received-unit conversion and cost are immutable invoice snapshots.
+                $conversion=(string)$original->conversion_factor_snapshot;
+                $qtyBase=bcmul($qty,$conversion,6);
+                $unitCost=(string)$original->unit_cost_entered;
+                $lineTotal=bcmul($qty,$unitCost,4);
+                $returned=DB::table('purchase_return_items')->where('organization_id',$organizationId)->where('original_purchase_invoice_item_id',$original->id)->sum('quantity_base');
+                $pendingReturned=$pendingReturnedByLine[$original->id] ?? '0.000000';
+                $alreadyReturned=bcadd((string)$returned,$pendingReturned,6);
+                $remaining=bcsub((string)$original->quantity_base,$alreadyReturned,6);
+                if (bccomp($qtyBase,$remaining,6)>0) {
+                    throw ValidationException::withMessages(['items' => ['Purchase return quantity exceeds the received quantity on the original invoice.']]);
+                }
+                $pendingReturnedByLine[$original->id]=bcadd($pendingReturned,$qtyBase,6);
                 $balance=DB::table('stock_balances')->where('organization_id',$organizationId)->where('product_id',$product->id)->where('location_id',$location->id)->lockForUpdate()->first();
                 $available=(string)($balance->quantity_base ?? 0);
                 if(bccomp($available,$qtyBase,6)<0) throw ValidationException::withMessages(['items'=>['Stock is insufficient for this purchase return.']]);

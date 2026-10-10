@@ -37,7 +37,7 @@ class ReturnController extends Controller
         $data=$request->validate([
             'supplier_id'=>['required','string','size:26'],
             'location_id'=>['required','string','size:26'],
-            'original_purchase_invoice_id'=>['nullable','string','size:26'],
+            'original_purchase_invoice_id'=>['required','string','size:26'],
             'return_date'=>['nullable','date'],
             'discount'=>['nullable','numeric','min:0'],
             'tax'=>['nullable','numeric','min:0'],
@@ -49,7 +49,7 @@ class ReturnController extends Controller
             'items.*.conversion_factor'=>['nullable','numeric','gt:0'],
             'items.*.unit_cost'=>['required','numeric','gte:0'],
             'items.*.packaging_id'=>['nullable','string','size:26'],
-            'items.*.original_purchase_invoice_item_id'=>['nullable','string','size:26'],
+            'items.*.original_purchase_invoice_item_id'=>['required','string','size:26','distinct'],
         ]);
         $data['created_by']=$request->user()->id;
         return response()->json($posting->postPurchaseReturn($request->user()->organization_id,$data),201);
