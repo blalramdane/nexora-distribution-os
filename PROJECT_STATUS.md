@@ -85,6 +85,7 @@ These must remain configurable and must not be guessed:
 - 9 database migrations exist for identity, reference data, catalog/parties, locations, transaction infrastructure, commercial documents, distribution/sync/projections, Sanctum tokens, and average cost.
 - API currently exposes 35 routes under `/api/v1`, including login, tenant-protected master data, purchase/sale/payment/return posting, stock adjustments, trip/load/route/settlement, and field sync operations.
 - Backend feature suite: **48 passed, 317 assertions**.
+- Fresh SQLite migration lifecycle probe: **PASS** — migrate from empty DB, seed twice, roll back all migrations, migrate again, and seed again; the temporary probe database was removed.
 - Playwright browser E2E: **3 passed** (local Alpha login and real dashboard/API, offline field visit queue/reconnect sync, and Arabic PWA manifest/icon validation). Tests use isolated port 3027 and never reuse an existing server.
 - API routes now enforce role permissions across dashboard, catalog, customers, suppliers, inventory, purchases, sales, payments, returns, trips, field visits, and sync. Permissions are scoped to roles owned by the authenticated organization; offline sync additionally checks permission for the specific transaction type before device lookup or replay acknowledgement.
 - Inactive user accounts are rejected by tenant middleware even if a token still exists. Trip creation rejects vehicles, representatives, and origin locations owned by another organization.
@@ -110,10 +111,15 @@ These must remain configurable and must not be guessed:
 **Local Alpha foundation only — not production-ready and not yet approved for live financial/inventory operations.** Do not market it as a finished system until the pilot and release gates pass.
 
 ## Environment limitation
-On 2026-10-10, no local MySQL/MariaDB service was found and Docker CLI could not connect to the Docker Desktop engine. The MySQL 8.4 migration gate remains untested; do not infer MySQL compatibility from passing SQLite tests.
+On 2026-10-10, no local MySQL/MariaDB service was found and Docker CLI could not connect to the Docker Desktop engine. PHP's PDO MySQL driver is installed, but there is no MySQL server listening locally. The MySQL 8.4 migration gate remains untested; do not infer MySQL compatibility from passing SQLite tests.
+
+## Database review findings (2026-10-10)
+- Confirmed: all 9 migrations pass a fresh SQLite lifecycle, including full rollback/re-migrate and repeatable reference-data seeding.
+- Confirmed: the existing GitHub Actions backend workflow defines a MySQL 8.4 service and migration/seed/rollback/test steps; current local commits have not been pushed, so that workflow has not verified these commits.
+- Follow-up integrity review: many tenant-owned relations still use single-column foreign keys (for example product → unit/category, document → party/location, trip → vehicle/representative). API-level tenant checks exist on key workflows, but the schema does not yet enforce organization equality for every such relation with composite tenant-scoped foreign keys. Complete this review before approving Batch 2; ordinary foreign-key existence alone is not proof of tenant isolation.
 
 ## Important
 The old system is currently unavailable. Do not block development on it. Later, create a migration adapter and reconcile opening balances, inventory and historical transactions.
 
 ## Next active task
-TASK-004 validation gate — verify the full migration chain and constraints against MySQL 8.4, review tenant-scoped foreign keys and unique constraints, and correct any portability/integrity gaps. Keep Batch 2 active until this passes and NEXORA AI reviews the evidence. Next local-Alpha priority: browser-based end-to-end verification of purchase → stock → vehicle load → route → sale → collection → settlement, followed by offline conflict handling review.
+TASK-004 validation gate — obtain an isolated MySQL 8.4 test server without starting or modifying shared project services, run the full migration/seed/rollback/test workflow on the current commits, then close the composite tenant-foreign-key review with negative tests. Keep Batch 2 active until these gates pass and NEXORA AI reviews the evidence. Next local-Alpha priority: browser-based end-to-end verification of purchase → stock → vehicle load → route → sale → collection → settlement, followed by offline conflict handling review.
