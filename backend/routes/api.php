@@ -39,6 +39,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/finance/references', [FinanceReferenceController::class, 'index']);
         Route::post('/customers', [CustomerController::class, 'store']);
         Route::get('/inventory', [InventoryController::class, 'index']);
+        Route::post('/inventory/adjust', [InventoryController::class, 'adjust']);
         Route::get('/locations', [LocationController::class, 'index']);
         Route::post('/purchases', [PurchaseController::class, 'store']);
         Route::post('/sales', [SalesController::class, 'store']);
