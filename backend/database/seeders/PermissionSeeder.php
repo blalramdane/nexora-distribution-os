@@ -26,6 +26,8 @@ class PermissionSeeder extends Seeder
             ['key' => 'inventory.view', 'name' => 'View inventory'],
             ['key' => 'inventory.adjust', 'name' => 'Adjust inventory'],
             ['key' => 'payments.record', 'name' => 'Record payments'],
+            ['key' => 'expenses.view', 'name' => 'View expenses'],
+            ['key' => 'expenses.post', 'name' => 'Post expenses'],
             ['key' => 'reports.view', 'name' => 'View reports'],
             ['key' => 'trips.view', 'name' => 'View trips and routes'],
             ['key' => 'trips.manage', 'name' => 'Manage trips and routes'],

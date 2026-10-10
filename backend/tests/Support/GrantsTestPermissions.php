@@ -16,7 +16,7 @@ trait GrantsTestPermissions
             'customers.view', 'customers.manage', 'suppliers.view',
             'settings.manage', 'sales.view', 'sales.post',
             'purchases.view', 'purchases.post', 'inventory.view',
-            'inventory.adjust', 'payments.record', 'reports.view',
+            'inventory.adjust', 'payments.record', 'expenses.view', 'expenses.post', 'reports.view',
             'trips.view', 'trips.manage', 'field.visit', 'field.sync',
         ];
 

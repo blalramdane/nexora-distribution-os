@@ -95,6 +95,19 @@ class PermissionEnforcementTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_expense_list_and_post_require_separate_permissions(): void
+    {
+        $user = $this->userInOrganization('Expense Permission Test');
+        $this->actingAs($user, 'sanctum')->getJson('/api/v1/expenses')->assertForbidden();
+        $this->postJson('/api/v1/expenses', [])->assertForbidden();
+        $this->grant($user, 'expenses.view');
+        $this->actingAs($user, 'sanctum')->getJson('/api/v1/expenses')->assertOk()->assertExactJson([]);
+        $this->postJson('/api/v1/expenses', [])->assertForbidden();
+        $postPermission = Permission::query()->firstOrCreate(['key' => 'expenses.post'], ['id' => (string) Str::ulid(), 'name' => 'Post expenses']);
+        $user->roles()->firstOrFail()->permissions()->syncWithoutDetaching([$postPermission->id]);
+        $this->postJson('/api/v1/expenses', [])->assertUnprocessable();
+    }
+
     private function userInOrganization(string $name): User
     {
         $organization = Organization::query()->create([

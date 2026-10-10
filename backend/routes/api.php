@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\ExpenseController;
 use App\Http\Controllers\Api\V1\FieldController;
 use App\Http\Controllers\Api\V1\FinanceReferenceController;
 use App\Http\Controllers\Api\V1\InventoryController;
@@ -50,6 +51,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/purchases/invoices/{invoiceId}/items', [PurchaseController::class, 'invoiceItems'])->middleware('permission:purchases.post');
         Route::post('/sales', [SalesController::class, 'store'])->middleware('permission:sales.post');
         Route::post('/payments', [PaymentController::class, 'store'])->middleware('permission:payments.record');
+        Route::get('/expenses', [ExpenseController::class, 'index'])->middleware('permission:expenses.view');
+        Route::post('/expenses', [ExpenseController::class, 'store'])->middleware('permission:expenses.post');
         Route::post('/returns/sales', [ReturnController::class, 'sales'])->middleware('permission:sales.post');
         Route::post('/returns/purchases', [ReturnController::class, 'purchases'])->middleware('permission:purchases.post');
         Route::get('/trips', [TripController::class, 'index'])->middleware('permission:trips.view');

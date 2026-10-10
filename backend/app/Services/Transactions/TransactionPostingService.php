@@ -392,6 +392,119 @@ final class TransactionPostingService
         }, attempts:5);
     }
 
+    public function postExpense(string $organizationId, array $data): array
+    {
+        return DB::transaction(function () use ($organizationId, $data): array {
+            if ($replay = $this->claimIdempotency($organizationId, 'expense.post', $data['idempotency_key'] ?? null, $data)) {
+                return $this->replayExpense($organizationId, $replay);
+            }
+
+            $account = DB::table('financial_accounts')
+                ->where('organization_id', $organizationId)
+                ->where('id', $data['financial_account_id'])
+                ->where('active', true)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $account) {
+                throw ValidationException::withMessages(['financial_account_id' => ['The financial account is not active in this organization.']]);
+            }
+
+            $trip = null;
+            $vehicle = null;
+
+            if (! empty($data['trip_id'])) {
+                $trip = DB::table('trips')
+                    ->where('organization_id', $organizationId)
+                    ->where('id', $data['trip_id'])
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $trip) {
+                    throw ValidationException::withMessages(['trip_id' => ['The selected trip does not belong to this organization.']]);
+                }
+                if (in_array($trip->status, ['completed', 'cancelled'], true)) {
+                    throw ValidationException::withMessages(['trip_id' => ['Expenses cannot be posted to a completed or cancelled trip.']]);
+                }
+
+                $vehicle = DB::table('vehicles')
+                    ->where('organization_id', $organizationId)
+                    ->where('id', $trip->vehicle_id)
+                    ->where('active', true)
+                    ->first();
+
+                if (! $vehicle) {
+                    throw ValidationException::withMessages(['trip_id' => ['The trip vehicle is missing or inactive.']]);
+                }
+                if (! empty($data['vehicle_id']) && $data['vehicle_id'] !== $vehicle->id) {
+                    throw ValidationException::withMessages(['vehicle_id' => ['The expense vehicle must match the selected trip vehicle.']]);
+                }
+            } elseif (! empty($data['vehicle_id'])) {
+                $vehicle = DB::table('vehicles')
+                    ->where('organization_id', $organizationId)
+                    ->where('id', $data['vehicle_id'])
+                    ->where('active', true)
+                    ->first();
+
+                if (! $vehicle) {
+                    throw ValidationException::withMessages(['vehicle_id' => ['The vehicle is not active in this organization.']]);
+                }
+            }
+
+            $expenseId = (string) Str::ulid();
+            $amount = bcadd((string) $data['amount'], '0', 4);
+            $category = trim($data['category']);
+
+            DB::table('expenses')->insert([
+                'id' => $expenseId,
+                'organization_id' => $organizationId,
+                'category' => $category,
+                'amount' => $amount,
+                'financial_account_id' => $account->id,
+                'expense_date' => $data['expense_date'] ?? now()->toDateString(),
+                'trip_id' => $trip?->id,
+                'vehicle_id' => $vehicle?->id,
+                'notes' => $data['notes'] ?? null,
+                'status' => 'posted',
+                'created_by' => $data['created_by'] ?? null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            if ($trip) {
+                // Settlement totals expenses from the source `expenses` rows only;
+                // this pivot expresses association and must never be summed again.
+                DB::table('trip_expenses')->insert([
+                    'id' => (string) Str::ulid(),
+                    'organization_id' => $organizationId,
+                    'trip_id' => $trip->id,
+                    'expense_id' => $expenseId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            $accounts = $this->ensureLedgerAccounts($organizationId);
+            $financialLedger = $this->ledgerAccountForFinancialAccount($organizationId, $account);
+            $transactionUuid = (string) Str::uuid();
+            $this->ledger($organizationId, $transactionUuid, $accounts['operating_expenses'], $amount, '0.0000', 'expense', $expenseId);
+            $this->ledger($organizationId, $transactionUuid, $financialLedger, '0.0000', $amount, 'expense', $expenseId);
+
+            $this->completeIdempotency($organizationId, 'expense.post', $data['idempotency_key'] ?? null, 'expense:'.$expenseId);
+
+            return [
+                'id' => $expenseId,
+                'category' => $category,
+                'amount' => $amount,
+                'financial_account_id' => $account->id,
+                'trip_id' => $trip?->id,
+                'vehicle_id' => $vehicle?->id,
+                'expense_date' => $data['expense_date'] ?? now()->toDateString(),
+                'status' => 'posted',
+            ];
+        }, attempts: 5);
+    }
+
     public function settleTrip(string $organizationId, array $data): array
     {
         return DB::transaction(function () use ($organizationId, $data): array {
@@ -1106,6 +1219,23 @@ final class TransactionPostingService
         return ['id'=>$payment->id,'party_type'=>$payment->party_type,'party_id'=>$payment->party_id,'amount'=>$payment->amount,'direction'=>$payment->direction,'status'=>$payment->status];
     }
 
+    private function replayExpense(string $organizationId, string $reference): array
+    {
+        [$type, $id] = array_pad(explode(':', $reference, 2), 2, null);
+        if ($type !== 'expense' || ! $id) {
+            throw ValidationException::withMessages(['idempotency_key' => ['Stored expense response is invalid.']]);
+        }
+        $expense = DB::table('expenses')->where('organization_id', $organizationId)->where('id', $id)->first();
+        if (! $expense) {
+            throw ValidationException::withMessages(['idempotency_key' => ['Stored expense response could not be replayed.']]);
+        }
+        return [
+            'id'=>$expense->id, 'category'=>$expense->category, 'amount'=>$expense->amount,
+            'financial_account_id'=>$expense->financial_account_id, 'trip_id'=>$expense->trip_id,
+            'vehicle_id'=>$expense->vehicle_id, 'expense_date'=>$expense->expense_date, 'status'=>$expense->status,
+        ];
+    }
+
     private function replaySale(string $organizationId, string $reference): array
     {
         [$type, $id] = array_pad(explode(':',$reference,2),2,null);
@@ -1182,6 +1312,7 @@ final class TransactionPostingService
             'cash'=>['1000','Cash','asset'],
             'sales_revenue'=>['4000','Sales Revenue','revenue'],
             'cogs'=>['5000','Cost of Goods Sold','expense'],
+            'operating_expenses'=>['5100','Operating Expenses','expense'],
             'sales_returns'=>['4100','Sales Returns','revenue'],
         ];
         $ids=[];

@@ -192,19 +192,41 @@ class EndToEndDistributionGateTest extends TestCase
 
         $this->assertSame('120.0000', number_format((float) $payment['amount'], 4, '.', ''));
 
+        $expensePayload = [
+            'category' => 'Fuel',
+            'amount' => 15,
+            'financial_account_id' => $financialAccountId,
+            'expense_date' => now()->toDateString(),
+            'trip_id' => $trip['id'],
+            'idempotency_key' => 'e2e-expense-001',
+        ];
+
+        $expense = $this->postJson('/api/v1/expenses', $expensePayload)->assertCreated()->json();
+        $expenseReplay = $this->postJson('/api/v1/expenses', $expensePayload)->assertCreated()->json();
+        $this->assertSame($expense['id'], $expenseReplay['id']);
+        $this->assertSame('15.0000', number_format((float) $expense['amount'], 4, '.', ''));
+        $this->assertSame(1, DB::table('expenses')->where('organization_id', $organization->id)->where('trip_id', $trip['id'])->count());
+        $this->assertSame(1, DB::table('trip_expenses')->where('organization_id', $organization->id)->where('trip_id', $trip['id'])->where('expense_id', $expense['id'])->count());
+        $this->getJson('/api/v1/expenses?trip_id='.$trip['id'])->assertOk()->assertJsonFragment(['id' => $expense['id'], 'category' => 'Fuel']);
+        $this->postJson('/api/v1/expenses', array_merge($expensePayload, ['amount' => 16]))->assertUnprocessable();
+        $this->assertSame(1, DB::table('expenses')->where('organization_id', $organization->id)->where('trip_id', $trip['id'])->count());
+
         $settlement = $this->postJson('/api/v1/trip-settlements', [
             'trip_id' => $trip['id'],
             'opening_cash' => 0,
-            'actual_cash' => 200,
+            'actual_cash' => 185,
             'closing_items' => [[
                 'product_id' => $productId,
                 'quantity_base' => 8,
             ]],
         ])->assertCreated()->json();
 
-        $this->assertSame('200.0000', number_format((float) $settlement['expected_cash'], 4, '.', ''));
+        $this->assertSame('185.0000', number_format((float) $settlement['expected_cash'], 4, '.', ''));
         $this->assertSame('0.0000', number_format((float) $settlement['cash_variance'], 4, '.', ''));
         $this->assertSame('0.0000', number_format((float) $settlement['stock_variance_value'], 4, '.', ''));
+        $this->assertTransactionBalanced($organization->id, 'expense', $expense['id']);
+        $this->postJson('/api/v1/expenses', array_merge($expensePayload, ['idempotency_key' => 'e2e-expense-after-close']))->assertUnprocessable();
+        $this->assertSame(1, DB::table('expenses')->where('organization_id', $organization->id)->where('trip_id', $trip['id'])->count());
 
         $customerSummary = DB::table('customer_balance_summaries')
             ->where('organization_id', $organization->id)
