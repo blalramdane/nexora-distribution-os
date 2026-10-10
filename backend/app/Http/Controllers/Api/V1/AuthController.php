@@ -40,28 +40,13 @@ class AuthController extends Controller
         return response()->json([
             'token' => $token->plainTextToken,
             'token_type' => 'Bearer',
-            'user' => [
-                'id' => $user->id,
-                'organization_id' => $user->organization_id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone,
-            ],
+            'user' => $this->userPayload($user),
         ]);
     }
 
     public function me(Request $request)
     {
-        $user = $request->user();
-
-        return response()->json([
-            'id' => $user->id,
-            'organization_id' => $user->organization_id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'phone' => $user->phone,
-            'status' => $user->status,
-        ]);
+        return response()->json($this->userPayload($request->user()));
     }
 
     public function logout(Request $request)
@@ -69,5 +54,36 @@ class AuthController extends Controller
         $request->user()?->currentAccessToken()?->delete();
 
         return response()->json(['status' => 'ok']);
+    }
+
+    private function userPayload(User $user): array
+    {
+        $user->loadMissing('roles.permissions');
+
+        $roles = $user->roles->map(static fn ($role) => [
+            'key' => $role->key,
+            'name' => $role->name,
+        ])->values();
+
+        $permissions = $user->roles
+            ->flatMap(static fn ($role) => $role->permissions)
+            ->unique('key')
+            ->sortBy('key')
+            ->values()
+            ->map(static fn ($permission) => [
+                'key' => $permission->key,
+                'name' => $permission->name,
+            ]);
+
+        return [
+            'id' => $user->id,
+            'organization_id' => $user->organization_id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'status' => $user->status,
+            'roles' => $roles,
+            'permissions' => $permissions,
+        ];
     }
 }
