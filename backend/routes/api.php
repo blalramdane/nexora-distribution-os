@@ -31,10 +31,13 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('permission:dashboard.view');
+        Route::get('/sales/history', [SalesController::class, 'history'])->middleware('permission:sales.view');
+        Route::get('/sales/invoices/{invoiceId}/items', [SalesController::class, 'invoiceItems'])->middleware('permission:sales.view');
         Route::get('/products', [CatalogController::class, 'products'])->middleware('permission:products.view');
         Route::get('/catalog/references', [CatalogController::class, 'references'])->middleware('permission:products.view');
         Route::post('/products', [CatalogController::class, 'storeProduct'])->middleware('permission:products.manage');
         Route::get('/customers', [CustomerController::class, 'index'])->middleware('permission:customers.view');
+        Route::get('/sales/invoices', [SalesController::class, 'openInvoices'])->middleware('permission:sales.view');
         Route::get('/suppliers', [SupplierController::class, 'index'])->middleware('permission:suppliers.view');
         Route::post('/suppliers', [SupplierController::class, 'store'])->middleware('permission:suppliers.manage');
         Route::get('/finance/references', [FinanceReferenceController::class, 'index'])->middleware('permission:settings.manage');

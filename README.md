@@ -25,10 +25,10 @@ The repository contains an implemented **local-alpha foundation**, not a product
 
 The latest local verification recorded on 2026-10-10:
 
-- Backend feature suite: **50 tests passed, 323 assertions**; 3 MySQL-only composite-FK tests are skipped on local SQLite by design.
+- Backend feature suite: **54 tests passed, 336 assertions**; 3 MySQL-only composite-FK tests are skipped on local SQLite by design.
 - Frontend production build: passed.
 - Frontend TypeScript check (`npm run lint`): passed.
-- Playwright browser E2E: **4 passed**, including Local Alpha login, UI creation of product/customer/supplier, purchase receipt updating stock, sale reducing the received balance from 1 to 0, offline field sync, and PWA installability.
+- Playwright browser E2E: **4 passed**, including Local Alpha login, UI creation of product/customer/supplier, purchase receipt, vehicle loading, trip-linked sale, allocated collection, trip settlement with cash variance 0 and stock variance value 0, invoice-linked sales return, final warehouse stock reconciliation, offline field sync, and PWA installability.
 - Local frontend responds at `http://127.0.0.1:3017`.
 - Local API health responds at `http://127.0.0.1:8017/api/v1/health`.
 - Local development uses a project-specific SQLite database. The production MySQL migration gate, security review, real-data pilot, backup/restore, and end-to-end browser tests are not yet approved.
@@ -65,7 +65,7 @@ cd frontend
 npm run test:e2e
 ```
 
-The local Alpha browser tests read credentials from the ignored `../.local-alpha-credentials.txt` file (or from `NEXORA_E2E_ORG`, `NEXORA_E2E_LOGIN`, and `NEXORA_E2E_PASSWORD` overrides). The E2E workflow writes clearly labeled test master data and one test purchase/sale to the local demo SQLite database; those records are retained for auditability and result in a zero closing stock balance for the generated E2E SKU.
+The local Alpha browser tests read credentials from the ignored `../.local-alpha-credentials.txt` file (or from `NEXORA_E2E_ORG`, `NEXORA_E2E_LOGIN`, and `NEXORA_E2E_PASSWORD` overrides). The E2E workflow writes clearly labeled demo master data, purchase/sale/payment and trip-settlement records to the local demo SQLite database; those records are retained for auditability. In the trip test, five units are received, three are loaded, one is sold, leaving two in the vehicle and two in the warehouse; all test data must be treated as demo data.
 
 ### Source of Truth
 

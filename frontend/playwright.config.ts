@@ -6,10 +6,12 @@ const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: true,
+  // The local Laravel server and SQLite demo database are shared by these tests;
+  // serialize browser flows to avoid request contention and cross-test state races.
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   reporter: "list",
   use: {
     baseURL: e2eBaseUrl,

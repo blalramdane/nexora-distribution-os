@@ -198,6 +198,17 @@ final class TransactionPostingService
                 ->where('organization_id',$organizationId)->where('id',$data['location_id'])
                 ->where('status','active')->firstOrFail();
 
+            if (!empty($data['trip_id'])) {
+                $trip = DB::table('trips')->where('organization_id', $organizationId)->where('id', $data['trip_id'])->first();
+                if (!$trip || in_array($trip->status, ['completed', 'cancelled'], true)) {
+                    throw ValidationException::withMessages(['trip_id' => ['The selected trip is missing or closed.']]);
+                }
+                $vehicleLocationId = DB::table('vehicles')->where('organization_id', $organizationId)->where('id', $trip->vehicle_id)->value('location_id');
+                if ($vehicleLocationId !== $location->id) {
+                    throw ValidationException::withMessages(['location_id' => ['A trip sale must use the selected trip vehicle location.']]);
+                }
+            }
+
             $invoiceId=(string) Str::ulid();
             $documentNumber=$this->nextDocumentNumber($organizationId,'sales_invoice','SI');
             $subtotal='0.0000';
@@ -479,10 +490,27 @@ final class TransactionPostingService
             $customer = DB::table('customers')->where('organization_id',$organizationId)->where('id',$data['customer_id'])->where('status','active')->firstOrFail();
             $location = DB::table('locations')->where('organization_id',$organizationId)->where('id',$data['location_id'])->where('status','active')->firstOrFail();
 
+            if (empty($data['original_sales_invoice_id'])) {
+                throw ValidationException::withMessages(['original_sales_invoice_id' => ['The original sales invoice is required for a return.']]);
+            }
+
+            $originalInvoice = DB::table('sales_invoices')
+                ->where('organization_id', $organizationId)
+                ->where('id', $data['original_sales_invoice_id'])
+                ->where('customer_id', $customer->id)
+                ->where('status', 'posted')
+                ->lockForUpdate()
+                ->first();
+
+            if (!$originalInvoice) {
+                throw ValidationException::withMessages(['original_sales_invoice_id' => ['The original invoice is not a posted invoice for this customer.']]);
+            }
+
             $returnId=(string)Str::ulid();
             $documentNumber=$this->nextDocumentNumber($organizationId,'sales_return','SR');
             $subtotal='0.0000';
             $items=[];
+            $pendingReturnedByLine=[];
 
             foreach($data['items'] as $line){
                 $product=DB::table('products')->where('organization_id',$organizationId)->where('id',$line['product_id'])->where('active',true)->firstOrFail();
@@ -493,16 +521,26 @@ final class TransactionPostingService
                 $lineTotal=bcmul($qty,$unitPrice,4);
                 $cost=(string)($product->default_cost ?? 0);
 
-                if (!empty($line['original_sales_invoice_item_id'])) {
-                    $original=DB::table('sales_invoice_items')->where('organization_id',$organizationId)->where('id',$line['original_sales_invoice_item_id'])->first();
-                    if(!$original || $original->product_id !== $product->id){
-                        throw ValidationException::withMessages(['items'=>['Original sales invoice item is invalid.']]);
-                    }
-                    $returned=DB::table('sales_return_items')->where('organization_id',$organizationId)->where('original_sales_invoice_item_id',$original->id)->sum('quantity_base');
-                    $remaining=bcsub((string)$original->quantity_base,(string)$returned,6);
-                    if(bccomp($qtyBase,$remaining,6)>0) throw ValidationException::withMessages(['items'=>['Return quantity exceeds the sold quantity.']]);
-                    $cost=(string)$original->unit_cost_snapshot;
+                if (empty($line['original_sales_invoice_item_id'])) {
+                    throw ValidationException::withMessages(['items' => ['Every returned item must reference a line on the original invoice.']]);
                 }
+
+                $original=DB::table('sales_invoice_items')
+                    ->where('organization_id',$organizationId)
+                    ->where('sales_invoice_id', $originalInvoice->id)
+                    ->where('id',$line['original_sales_invoice_item_id'])
+                    ->lockForUpdate()
+                    ->first();
+                if(!$original || $original->product_id !== $product->id){
+                    throw ValidationException::withMessages(['items'=>['Original sales invoice item is invalid.']]);
+                }
+                $returned=DB::table('sales_return_items')->where('organization_id',$organizationId)->where('original_sales_invoice_item_id',$original->id)->sum('quantity_base');
+                $pendingReturned = $pendingReturnedByLine[$original->id] ?? '0.000000';
+                $alreadyReturned = bcadd((string)$returned, $pendingReturned, 6);
+                $remaining=bcsub((string)$original->quantity_base,(string)$alreadyReturned,6);
+                if(bccomp($qtyBase,$remaining,6)>0) throw ValidationException::withMessages(['items'=>['Return quantity exceeds the sold quantity.']]);
+                $pendingReturnedByLine[$original->id] = bcadd($pendingReturned, $qtyBase, 6);
+                $cost=(string)$original->unit_cost_snapshot;
 
                 $items[]=compact('product','conversion','qty','qtyBase','unitPrice','lineTotal','cost','line');
                 $subtotal=bcadd($subtotal,$lineTotal,4);
@@ -699,6 +737,16 @@ final class TransactionPostingService
             }
             if ($amount <= 0) {
                 throw ValidationException::withMessages(['amount'=>['Payment amount must be greater than zero.']]);
+            }
+
+            if (!empty($data['trip_id'])) {
+                $trip = DB::table('trips')->where('organization_id', $organizationId)->where('id', $data['trip_id'])->first();
+                if (!$trip || in_array($trip->status, ['completed', 'cancelled'], true)) {
+                    throw ValidationException::withMessages(['trip_id' => ['The selected trip is missing or closed.']]);
+                }
+                if ($partyType !== 'customer' || $direction !== 'inbound') {
+                    throw ValidationException::withMessages(['trip_id' => ['Only customer collections can be linked to a distribution trip.']]);
+                }
             }
 
             $partyTable = $partyType === 'customer' ? 'customers' : 'suppliers';

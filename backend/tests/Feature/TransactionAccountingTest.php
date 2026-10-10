@@ -8,6 +8,7 @@ use App\Services\Transactions\TransactionPostingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class TransactionAccountingTest extends TestCase
@@ -70,6 +71,302 @@ class TransactionAccountingTest extends TestCase
             'paid_amount' => '30.0000',
             'balance_due' => '70.0000',
         ]);
+    }
+
+    public function test_global_payment_method_can_be_used_for_an_allocated_customer_collection(): void
+    {
+        [$organization, $user, $unitId, $productId, $customerId, $locationId] = $this->foundation();
+
+        DB::table('stock_balances')->insert([
+            'id' => (string) Str::ulid(),
+            'organization_id' => $organization->id,
+            'product_id' => $productId,
+            'location_id' => $locationId,
+            'quantity_base' => 5,
+            'reserved_quantity_base' => 0,
+            'average_cost' => 40,
+            'updated_at' => now(),
+        ]);
+
+        $service = app(TransactionPostingService::class);
+        $sale = $service->postSale($organization->id, [
+            'customer_id' => $customerId,
+            'location_id' => $locationId,
+            'items' => [[
+                'product_id' => $productId,
+                'quantity' => 1,
+                'conversion_factor' => 1,
+                'unit_price' => 100,
+                'unit_id' => $unitId,
+            ]],
+            'paid_amount' => 0,
+            'idempotency_key' => 'global-method-sale-'.$organization->id,
+            'created_by' => $user->id,
+        ]);
+
+        $financialAccountId = (string) Str::ulid();
+        DB::table('financial_accounts')->insert([
+            'id' => $financialAccountId,
+            'organization_id' => $organization->id,
+            'code' => 'CASH-GLOBAL-TEST',
+            'name' => 'Global method collection test',
+            'type' => 'cash',
+            'currency' => 'EGP',
+            'opening_balance' => 0,
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $paymentMethodId = (string) Str::ulid();
+        DB::table('payment_methods')->insert([
+            'id' => $paymentMethodId,
+            'organization_id' => null,
+            'code' => 'GLOBAL-CASH',
+            'name_ar' => 'نقدي مشترك',
+            'requires_reference' => false,
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $payment = $service->postPayment($organization->id, [
+            'party_type' => 'customer',
+            'party_id' => $customerId,
+            'direction' => 'inbound',
+            'amount' => 100,
+            'financial_account_id' => $financialAccountId,
+            'payment_method_id' => $paymentMethodId,
+            'allocations' => [[
+                'document_type' => 'sales_invoice',
+                'document_id' => $sale['id'],
+                'amount' => 100,
+            ]],
+            'idempotency_key' => 'global-method-payment-'.$organization->id,
+            'created_by' => $user->id,
+        ]);
+
+        $this->assertSame('posted', $payment['status']);
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment['id'],
+            'organization_id' => $organization->id,
+            'payment_method_id' => $paymentMethodId,
+        ]);
+        $this->assertDatabaseHas('sales_invoices', [
+            'id' => $sale['id'],
+            'paid_amount' => '100.0000',
+            'balance_due' => '0.0000',
+        ]);
+    }
+
+    public function test_trip_sale_is_rejected_when_using_the_warehouse_instead_of_vehicle_location(): void
+    {
+        [$organization, $user, $unitId, $productId, $customerId, $warehouseId] = $this->foundation();
+
+        $vehicleLocationId = (string) Str::ulid();
+        DB::table('locations')->insert([
+            'id' => $vehicleLocationId,
+            'organization_id' => $organization->id,
+            'code' => 'VEHICLE-STOCK-01',
+            'name' => 'Vehicle Stock Location',
+            'type' => 'vehicle',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $vehicleId = (string) Str::ulid();
+        DB::table('vehicles')->insert([
+            'id' => $vehicleId,
+            'organization_id' => $organization->id,
+            'location_id' => $vehicleLocationId,
+            'code' => 'VEHICLE-01',
+            'name' => 'Test Delivery Vehicle',
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $tripId = (string) Str::ulid();
+        DB::table('trips')->insert([
+            'id' => $tripId,
+            'organization_id' => $organization->id,
+            'trip_number' => 'TRIP-VEHICLE-01',
+            'vehicle_id' => $vehicleId,
+            'rep_user_id' => $user->id,
+            'status' => 'loaded',
+            'trip_date' => now()->toDateString(),
+            'origin_location_id' => $warehouseId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        try {
+            app(TransactionPostingService::class)->postSale($organization->id, [
+                'customer_id' => $customerId,
+                'location_id' => $warehouseId,
+                'trip_id' => $tripId,
+                'items' => [[
+                    'product_id' => $productId,
+                    'quantity' => 1,
+                    'conversion_factor' => 1,
+                    'unit_price' => 100,
+                    'unit_id' => $unitId,
+                ]],
+                'paid_amount' => 0,
+                'idempotency_key' => 'wrong-trip-location-'.$tripId,
+                'created_by' => $user->id,
+            ]);
+
+            $this->fail('A trip sale must not post against the warehouse location.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('location_id', $exception->errors());
+        }
+
+        $this->assertDatabaseCount('sales_invoices', 0);
+        $this->assertDatabaseCount('stock_movements', 0);
+    }
+
+    public function test_sales_return_rejects_an_invoice_owned_by_another_customer(): void
+    {
+        [$organization, $user, $unitId, $productId, $customerId, $locationId] = $this->foundation();
+
+        DB::table('stock_balances')->insert([
+            'id' => (string) Str::ulid(),
+            'organization_id' => $organization->id,
+            'product_id' => $productId,
+            'location_id' => $locationId,
+            'quantity_base' => 5,
+            'reserved_quantity_base' => 0,
+            'average_cost' => 40,
+            'updated_at' => now(),
+        ]);
+
+        $otherCustomerId = (string) Str::ulid();
+        DB::table('customers')->insert([
+            'id' => $otherCustomerId,
+            'organization_id' => $organization->id,
+            'code' => 'CUS-OTHER',
+            'name' => 'Other Test Customer',
+            'normalized_name' => 'other test customer',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $service = app(TransactionPostingService::class);
+        $sale = $service->postSale($organization->id, [
+            'customer_id' => $customerId,
+            'location_id' => $locationId,
+            'items' => [[
+                'product_id' => $productId,
+                'quantity' => 1,
+                'conversion_factor' => 1,
+                'unit_price' => 100,
+                'unit_id' => $unitId,
+            ]],
+            'paid_amount' => 100,
+            'idempotency_key' => 'sales-return-foreign-customer-'.$organization->id,
+            'created_by' => $user->id,
+        ]);
+        $saleItemId = DB::table('sales_invoice_items')->where('sales_invoice_id', $sale['id'])->value('id');
+
+        try {
+            $service->postSalesReturn($organization->id, [
+                'customer_id' => $otherCustomerId,
+                'location_id' => $locationId,
+                'original_sales_invoice_id' => $sale['id'],
+                'items' => [[
+                    'product_id' => $productId,
+                    'quantity' => 1,
+                    'conversion_factor' => 1,
+                    'unit_price' => 100,
+                    'original_sales_invoice_item_id' => $saleItemId,
+                ]],
+                'idempotency_key' => 'foreign-customer-return-'.$organization->id,
+                'created_by' => $user->id,
+            ]);
+
+            $this->fail('A sales return must not reference another customer’s invoice.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('original_sales_invoice_id', $exception->errors());
+        }
+
+        $this->assertDatabaseCount('sales_returns', 0);
+        $this->assertSame(
+            '4.000000',
+            number_format((float) DB::table('stock_balances')->where('organization_id', $organization->id)->where('product_id', $productId)->where('location_id', $locationId)->value('quantity_base'), 6, '.', '')
+        );
+    }
+
+    public function test_sales_return_cannot_over_return_a_line_repeated_twice_in_one_request(): void
+    {
+        [$organization, $user, $unitId, $productId, $customerId, $locationId] = $this->foundation();
+
+        DB::table('stock_balances')->insert([
+            'id' => (string) Str::ulid(),
+            'organization_id' => $organization->id,
+            'product_id' => $productId,
+            'location_id' => $locationId,
+            'quantity_base' => 10,
+            'reserved_quantity_base' => 0,
+            'average_cost' => 40,
+            'updated_at' => now(),
+        ]);
+
+        $service = app(TransactionPostingService::class);
+        $sale = $service->postSale($organization->id, [
+            'customer_id' => $customerId,
+            'location_id' => $locationId,
+            'items' => [[
+                'product_id' => $productId,
+                'quantity' => 2,
+                'conversion_factor' => 1,
+                'unit_price' => 100,
+                'unit_id' => $unitId,
+            ]],
+            'paid_amount' => 200,
+            'idempotency_key' => 'duplicate-line-return-sale-'.$organization->id,
+            'created_by' => $user->id,
+        ]);
+        $saleItemId = DB::table('sales_invoice_items')->where('sales_invoice_id', $sale['id'])->value('id');
+
+        try {
+            $service->postSalesReturn($organization->id, [
+                'customer_id' => $customerId,
+                'location_id' => $locationId,
+                'original_sales_invoice_id' => $sale['id'],
+                'items' => [
+                    [
+                        'product_id' => $productId,
+                        'quantity' => 1.5,
+                        'conversion_factor' => 1,
+                        'unit_price' => 100,
+                        'original_sales_invoice_item_id' => $saleItemId,
+                    ],
+                    [
+                        'product_id' => $productId,
+                        'quantity' => 1,
+                        'conversion_factor' => 1,
+                        'unit_price' => 100,
+                        'original_sales_invoice_item_id' => $saleItemId,
+                    ],
+                ],
+                'idempotency_key' => 'duplicate-line-return-'.$organization->id,
+                'created_by' => $user->id,
+            ]);
+
+            $this->fail('The total quantity returned from one original line must not exceed its sold quantity.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('items', $exception->errors());
+        }
+
+        $this->assertDatabaseCount('sales_returns', 0);
+        $this->assertDatabaseCount('sales_return_items', 0);
+        $this->assertSame(
+            '8.000000',
+            number_format((float) DB::table('stock_balances')->where('organization_id', $organization->id)->where('product_id', $productId)->where('location_id', $locationId)->value('quantity_base'), 6, '.', '')
+        );
     }
 
     public function test_trip_settlement_does_not_double_count_later_customer_collection(): void
@@ -183,7 +480,6 @@ class TransactionAccountingTest extends TestCase
         $this->assertSame('80.0000', number_format((float) $settlement['expected_cash'], 4, '.', ''));
         $this->assertSame('0.0000', number_format((float) $settlement['cash_variance'], 4, '.', ''));
     }
-
 
     public function test_sales_return_reconciles_invoice_stock_and_balances_ledger(): void
     {

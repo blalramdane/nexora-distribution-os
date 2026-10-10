@@ -161,7 +161,9 @@ return new class extends Migration
         ],
         'payments' => [
             'payments_org_account_fk' => ['financial_account_id', 'financial_accounts'],
-            'payments_org_method_fk' => ['payment_method_id', 'payment_methods'],
+            // Payment methods can be global/shared (organization_id = NULL).
+            // The service validates global-or-same-tenant ownership; a composite
+            // tenant FK would reject every legitimate reference to a global method.
         ],
         'payment_allocations' => [
             'payment_allocations_org_payment_fk' => ['payment_id', 'payments'],

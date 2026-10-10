@@ -32,7 +32,7 @@ class TripController extends Controller
     public function index(Request $request)
     {
         $org=$request->user()->organization_id;
-        return response()->json(DB::table('trips as t')->join('vehicles as v',function($join){$join->on('v.id','=','t.vehicle_id')->on('v.organization_id','=','t.organization_id');})->join('users as u',function($join){$join->on('u.id','=','t.rep_user_id')->on('u.organization_id','=','t.organization_id');})->where('t.organization_id',$org)->select('t.*','v.name as vehicle_name','v.code as vehicle_code','u.name as rep_name')->orderByDesc('t.trip_date')->limit(100)->get());
+        return response()->json(DB::table('trips as t')->join('vehicles as v',function($join){$join->on('v.id','=','t.vehicle_id')->on('v.organization_id','=','t.organization_id');})->join('users as u',function($join){$join->on('u.id','=','t.rep_user_id')->on('u.organization_id','=','t.organization_id');})->where('t.organization_id',$org)->select('t.*','v.name as vehicle_name','v.code as vehicle_code','v.location_id as vehicle_location_id','u.name as rep_name')->orderByDesc('t.trip_date')->limit(100)->get());
     }
 
     public function vehicles(Request $request){return response()->json(DB::table('vehicles')->where('organization_id',$request->user()->organization_id)->where('active',true)->orderBy('name')->get());}
