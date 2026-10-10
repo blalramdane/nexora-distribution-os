@@ -96,7 +96,9 @@ final class SyncController extends Controller
         $organizationId = $request->user()->organization_id;
         $deviceUuid = $request->header('X-Device-UUID');
 
-        if (!$deviceUuid) {
+        $this->authorizeOperationType($request, $data['operation_type']);
+
+        if (! $deviceUuid) {
             throw ValidationException::withMessages([
                 'device_uuid' => ['X-Device-UUID is required for offline sync.'],
             ]);
@@ -109,7 +111,7 @@ final class SyncController extends Controller
             ->whereNull('revoked_at')
             ->first();
 
-        if (!$device) {
+        if (! $device) {
             throw ValidationException::withMessages([
                 'device_uuid' => ['The device is not registered or has been revoked.'],
             ]);
@@ -135,7 +137,7 @@ final class SyncController extends Controller
                 ->first();
 
             if ($existing) {
-                if (!hash_equals($existing->payload_hash, $payloadHash)
+                if (! hash_equals($existing->payload_hash, $payloadHash)
                     || $existing->operation_type !== $data['operation_type']
                     || $existing->idempotency_key !== $data['idempotency_key']) {
                     throw ValidationException::withMessages([
@@ -154,7 +156,7 @@ final class SyncController extends Controller
                 ->first();
 
             if ($sameKey) {
-                if (!hash_equals($sameKey->payload_hash, $payloadHash)) {
+                if (! hash_equals($sameKey->payload_hash, $payloadHash)) {
                     throw ValidationException::withMessages([
                         'idempotency_key' => ['The idempotency key was reused with different data.'],
                     ]);
@@ -256,9 +258,36 @@ final class SyncController extends Controller
         });
     }
 
+    private function authorizeOperationType(Request $request, string $operationType): void
+    {
+        $permission = match ($operationType) {
+            'field.visit' => 'field.visit',
+            'POST /sales' => 'sales.post',
+            'POST /payments' => 'payments.record',
+            'POST /returns/sales' => 'sales.post',
+            'POST /returns/purchases' => 'purchases.post',
+            'POST /purchases' => 'purchases.post',
+            'POST /trip-loads' => 'inventory.adjust',
+            default => null,
+        };
+
+        if ($permission === null) {
+            throw ValidationException::withMessages([
+                'operation_type' => ['Unsupported offline transaction type.'],
+            ]);
+        }
+
+        $allowed = $request->user()->roles()
+            ->where('roles.organization_id', $request->user()->organization_id)
+            ->whereHas('permissions', static fn ($query) => $query->where('key', $permission))
+            ->exists();
+
+        abort_unless($allowed, 403, 'You do not have permission to synchronize this operation.');
+    }
+
     private function dispatchFieldVisit(string $organizationId, string $userId, array $payload): array
     {
-        if (($payload['path'] ?? null) !== '/field/visits' || !is_array($payload['body'] ?? null)) {
+        if (($payload['path'] ?? null) !== '/field/visits' || ! is_array($payload['body'] ?? null)) {
             throw ValidationException::withMessages([
                 'payload' => ['Field visit sync requires the /field/visits path and a body object.'],
             ]);
@@ -280,7 +309,7 @@ final class SyncController extends Controller
             ->where('rep_user_id', $userId)
             ->first();
 
-        if (!$trip) {
+        if (! $trip) {
             throw ValidationException::withMessages([
                 'trip_id' => ['The trip does not belong to the authenticated field representative.'],
             ]);
@@ -294,7 +323,7 @@ final class SyncController extends Controller
             ->where('c.organization_id', $organizationId)
             ->exists();
 
-        if (!$assignmentExists) {
+        if (! $assignmentExists) {
             throw ValidationException::withMessages([
                 'customer_id' => ['The customer is not assigned to this trip.'],
             ]);
@@ -357,7 +386,7 @@ final class SyncController extends Controller
     ): array {
         $body = $sync['payload']['body'] ?? null;
 
-        if (!is_array($body)) {
+        if (! is_array($body)) {
             throw ValidationException::withMessages([
                 'payload.body' => ['Offline transaction payload must contain a body object.'],
             ]);
@@ -382,16 +411,18 @@ final class SyncController extends Controller
 
     private function resultReference(string $operationType, array $result): ?string
     {
-        if (!isset($result['id'])) return null;
+        if (! isset($result['id'])) {
+            return null;
+        }
 
         return match ($operationType) {
-            'POST /sales' => 'sales_invoice:' . $result['id'],
-            'POST /payments' => 'payment:' . $result['id'],
-            'POST /returns/sales' => 'sales_return:' . $result['id'],
-            'POST /returns/purchases' => 'purchase_return:' . $result['id'],
-            'POST /purchases' => 'purchase_invoice:' . $result['id'],
-            'POST /trip-loads' => 'trip_load:' . $result['id'],
-            'field.visit' => 'customer_visit:' . $result['id'],
+            'POST /sales' => 'sales_invoice:'.$result['id'],
+            'POST /payments' => 'payment:'.$result['id'],
+            'POST /returns/sales' => 'sales_return:'.$result['id'],
+            'POST /returns/purchases' => 'purchase_return:'.$result['id'],
+            'POST /purchases' => 'purchase_invoice:'.$result['id'],
+            'POST /trip-loads' => 'trip_load:'.$result['id'],
+            'field.visit' => 'customer_visit:'.$result['id'],
             default => null,
         };
     }

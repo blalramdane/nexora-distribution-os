@@ -8,10 +8,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
+use Tests\Support\GrantsTestPermissions;
 
 class OfflineTransactionFieldGateTest extends TestCase
 {
     use RefreshDatabase;
+    use GrantsTestPermissions;
 
     public function test_offline_sale_executes_transaction_once_and_retry_replays_authoritative_result(): void
     {
@@ -169,6 +171,7 @@ class OfflineTransactionFieldGateTest extends TestCase
             'password' => 'secret-password',
             'status' => 'active',
         ]);
+        $this->grantTestPermissions($user);
 
         $deviceUuid = (string) Str::uuid();
         DB::table('devices')->insert([

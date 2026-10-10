@@ -25,7 +25,7 @@ The repository contains an implemented **local-alpha foundation**, not a product
 
 The latest local verification recorded on 2026-10-10:
 
-- Backend feature suite: **43 tests passed, 302 assertions**.
+- Backend feature suite: **48 tests passed, 317 assertions**.
 - Frontend production build: passed.
 - Frontend TypeScript check (`npm run lint`): passed.
 - Local frontend responds at `http://127.0.0.1:3017`.

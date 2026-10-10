@@ -41,6 +41,15 @@ class TripController extends Controller
     {
         $data=$request->validate(['vehicle_id'=>['required','string','size:26'],'rep_user_id'=>['required','string','size:26'],'origin_location_id'=>['required','string','size:26'],'trip_date'=>['nullable','date'],'notes'=>['nullable','string']]);
         $org=$request->user()->organization_id;
+        foreach ([
+            'vehicle_id' => ['vehicles', $data['vehicle_id']],
+            'rep_user_id' => ['users', $data['rep_user_id']],
+            'origin_location_id' => ['locations', $data['origin_location_id']],
+        ] as $field => [$table, $id]) {
+            if (!DB::table($table)->where('id', $id)->where('organization_id', $org)->exists()) {
+                throw ValidationException::withMessages([$field => ['The selected record does not belong to this organization.']]);
+            }
+        }
         $trip=null;
         DB::transaction(function()use(&$trip,$data,$org){$tripId=(string)Str::ulid();$trip=['id'=>$tripId,'organization_id'=>$org,'trip_number'=>$this->number($org,'trip'),'vehicle_id'=>$data['vehicle_id'],'rep_user_id'=>$data['rep_user_id'],'status'=>'planned','trip_date'=>$data['trip_date']??now()->toDateString(),'origin_location_id'=>$data['origin_location_id'],'notes'=>$data['notes']??null,'created_at'=>now(),'updated_at'=>now()];DB::table('trips')->insert($trip);});
         return response()->json($trip,201);

@@ -8,10 +8,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
+use Tests\Support\GrantsTestPermissions;
 
 class OfflineSyncTransactionExecutionTest extends TestCase
 {
     use RefreshDatabase;
+    use GrantsTestPermissions;
 
     public function test_offline_sale_is_posted_once_and_retry_replays_without_duplicate_business_mutation(): void
     {
@@ -198,6 +200,7 @@ class OfflineSyncTransactionExecutionTest extends TestCase
             'password' => 'secret-password',
             'status' => 'active',
         ]);
+        $this->grantTestPermissions($user);
 
         $unitId = (string) Str::ulid();
         DB::table('units')->insert([

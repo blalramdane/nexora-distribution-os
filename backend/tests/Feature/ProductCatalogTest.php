@@ -8,10 +8,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use Tests\Support\GrantsTestPermissions;
 use Tests\TestCase;
 
 class ProductCatalogTest extends TestCase
 {
+    use GrantsTestPermissions;
     use RefreshDatabase;
 
     public function test_catalog_references_and_product_creation_are_tenant_scoped(): void
@@ -32,6 +34,7 @@ class ProductCatalogTest extends TestCase
             'password' => 'secret-password',
             'status' => 'active',
         ]);
+        $this->grantTestPermissions($user);
 
         $unit = (string) Str::ulid();
         DB::table('units')->insert([

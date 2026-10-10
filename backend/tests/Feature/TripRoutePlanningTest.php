@@ -9,10 +9,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
+use Tests\Support\GrantsTestPermissions;
 
 class TripRoutePlanningTest extends TestCase
 {
     use RefreshDatabase;
+    use GrantsTestPermissions;
 
     public function test_route_optimizer_orders_multiple_customers_by_distance_and_allows_manual_reorder(): void
     {
@@ -77,6 +79,7 @@ class TripRoutePlanningTest extends TestCase
             'password'=>'secret-password',
             'status'=>'active',
         ]);
+        $this->grantTestPermissions($user);
 
         $locationId=(string)Str::ulid();
         DB::table('locations')->insert([

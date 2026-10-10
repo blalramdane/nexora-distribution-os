@@ -8,10 +8,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
+use Tests\Support\GrantsTestPermissions;
 
 class OfflineSyncIntegrityTest extends TestCase
 {
     use RefreshDatabase;
+    use GrantsTestPermissions;
 
     public function test_authenticated_user_can_register_a_new_field_device(): void
     {
@@ -62,6 +64,7 @@ class OfflineSyncIntegrityTest extends TestCase
             'password' => 'secret-password',
             'status' => 'active',
         ]);
+        $this->grantTestPermissions($secondUser);
 
         $this->actingAs($secondUser)->postJson('/api/v1/sync/device', [
             'device_uuid' => $deviceUuid,
@@ -327,6 +330,7 @@ class OfflineSyncIntegrityTest extends TestCase
             'password' => 'secret-password',
             'status' => 'active',
         ]);
+        $this->grantTestPermissions($user);
 
         $deviceUuid = (string) Str::uuid();
         DB::table('devices')->insert([

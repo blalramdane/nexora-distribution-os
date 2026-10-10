@@ -84,7 +84,10 @@ These must remain configurable and must not be guessed:
 ## Local implementation evidence (2026-10-10)
 - 9 database migrations exist for identity, reference data, catalog/parties, locations, transaction infrastructure, commercial documents, distribution/sync/projections, Sanctum tokens, and average cost.
 - API currently exposes 35 routes under `/api/v1`, including login, tenant-protected master data, purchase/sale/payment/return posting, stock adjustments, trip/load/route/settlement, and field sync operations.
-- Backend feature suite: **43 passed, 302 assertions**.
+- Backend feature suite: **48 passed, 317 assertions**.
+- API routes now enforce role permissions across dashboard, catalog, customers, suppliers, inventory, purchases, sales, payments, returns, trips, field visits, and sync. Permissions are scoped to roles owned by the authenticated organization; offline sync additionally checks permission for the specific transaction type before device lookup or replay acknowledgement.
+- Inactive user accounts are rejected by tenant middleware even if a token still exists. Trip creation rejects vehicles, representatives, and origin locations owned by another organization.
+- Added automated tests for permission denial/grant, foreign-organization role isolation and response filtering, offline sync privilege escalation, and cross-tenant trip creation.
 - Frontend production build: passed; TypeScript lint: passed.
 - Local frontend `http://127.0.0.1:3017`; local API `http://127.0.0.1:8017`.
 - Local database is isolated SQLite at `backend/database/distribution-local.sqlite`; it must not be treated as production data.
@@ -109,4 +112,4 @@ These must remain configurable and must not be guessed:
 The old system is currently unavailable. Do not block development on it. Later, create a migration adapter and reconcile opening balances, inventory and historical transactions.
 
 ## Next active task
-TASK-004 validation gate — verify the full migration chain and constraints against MySQL 8.4, review tenant-scoped foreign keys and unique constraints, and correct any integrity gaps. Keep Batch 2 active until this passes and NEXORA AI reviews the evidence. Next local-Alpha priority: route-by-route RBAC enforcement and end-to-end browser verification.
+TASK-004 validation gate — verify the full migration chain and constraints against MySQL 8.4, review tenant-scoped foreign keys and unique constraints, and correct any portability/integrity gaps. Keep Batch 2 active until this passes and NEXORA AI reviews the evidence. Next local-Alpha priority: browser-based end-to-end verification of purchase → stock → vehicle load → route → sale → collection → settlement, followed by offline conflict handling review.

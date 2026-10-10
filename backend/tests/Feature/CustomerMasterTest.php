@@ -8,10 +8,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use Tests\Support\GrantsTestPermissions;
 use Tests\TestCase;
 
 class CustomerMasterTest extends TestCase
 {
+    use GrantsTestPermissions;
     use RefreshDatabase;
 
     public function test_customer_creation_is_tenant_scoped_and_can_persist_primary_address(): void
@@ -32,6 +34,7 @@ class CustomerMasterTest extends TestCase
             'password' => 'secret-password',
             'status' => 'active',
         ]);
+        $this->grantTestPermissions($user);
 
         $foreignOrg = Organization::query()->create([
             'name' => 'Foreign Customer Test',

@@ -8,10 +8,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use Tests\Support\GrantsTestPermissions;
 use Tests\TestCase;
 
 class EndToEndDistributionGateTest extends TestCase
 {
+    use GrantsTestPermissions;
     use RefreshDatabase;
 
     public function test_distribution_flow_reconciles_stock_cash_and_customer_balance_end_to_end(): void
@@ -67,7 +69,7 @@ class EndToEndDistributionGateTest extends TestCase
             'idempotency_key' => 'e2e-adjustment-002',
         ])->assertCreated()->json();
 
-        $this->assertSame('-1.000000', number_format((float)$reversal['quantity_delta'], 6, '.', ''));
+        $this->assertSame('-1.000000', number_format((float) $reversal['quantity_delta'], 6, '.', ''));
         $this->assertSame('10.000000', $this->stock($organization->id, $productId, $warehouseId));
 
         $trip = $this->postJson('/api/v1/trips', [
@@ -270,6 +272,7 @@ class EndToEndDistributionGateTest extends TestCase
             'password' => 'secret-password',
             'status' => 'active',
         ]);
+        $this->grantTestPermissions($user);
 
         $unitId = (string) Str::ulid();
         DB::table('units')->insert([

@@ -13,10 +13,10 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $data = $request->validate([
-            'organization_id' => ['required','string','size:26'],
-            'login' => ['required','string','max:255'],
-            'password' => ['required','string'],
-            'device_name' => ['required','string','max:128'],
+            'organization_id' => ['required', 'string', 'size:26'],
+            'login' => ['required', 'string', 'max:255'],
+            'password' => ['required', 'string'],
+            'device_name' => ['required', 'string', 'max:128'],
         ]);
 
         $user = User::query()
@@ -28,7 +28,7 @@ class AuthController extends Controller
             ->where('status', 'active')
             ->first();
 
-        if (!$user || !Hash::check($data['password'], $user->password)) {
+        if (! $user || ! Hash::check($data['password'], $user->password)) {
             throw ValidationException::withMessages([
                 'login' => ['بيانات الدخول غير صحيحة.'],
             ]);
@@ -58,14 +58,17 @@ class AuthController extends Controller
 
     private function userPayload(User $user): array
     {
-        $user->loadMissing('roles.permissions');
+        $roles = $user->roles()
+            ->where('roles.organization_id', $user->organization_id)
+            ->with('permissions')
+            ->get();
 
-        $roles = $user->roles->map(static fn ($role) => [
+        $rolePayload = $roles->map(static fn ($role) => [
             'key' => $role->key,
             'name' => $role->name,
         ])->values();
 
-        $permissions = $user->roles
+        $permissions = $roles
             ->flatMap(static fn ($role) => $role->permissions)
             ->unique('key')
             ->sortBy('key')
@@ -82,7 +85,7 @@ class AuthController extends Controller
             'email' => $user->email,
             'phone' => $user->phone,
             'status' => $user->status,
-            'roles' => $roles,
+            'roles' => $rolePayload,
             'permissions' => $permissions,
         ];
     }

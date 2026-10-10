@@ -14,6 +14,7 @@ class ResolveTenant
         $organizationId = $request->user()?->organization_id;
 
         abort_unless($organizationId, 403, 'Tenant context is required.');
+        abort_unless($request->user()?->status === 'active', 403, 'User account is inactive.');
 
         $organization = Organization::query()->find($organizationId);
 

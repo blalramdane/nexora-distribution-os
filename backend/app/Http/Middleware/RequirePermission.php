@@ -15,6 +15,7 @@ class RequirePermission
         abort_unless($user, 401);
 
         $allowed = $user->roles()
+            ->where('roles.organization_id', $user->organization_id)
             ->whereHas('permissions', static fn ($query) => $query->where('key', $permission))
             ->exists();
 
