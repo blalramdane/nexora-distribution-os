@@ -131,6 +131,42 @@ class TenantScopedForeignKeyTest extends TestCase
         ]);
     }
 
+    public function test_database_rejects_sales_invoice_for_another_organizations_customer(): void
+    {
+        [$orgA, $orgB] = $this->organizations();
+        $sourceLocationId = $this->location($orgA->id, 'A-SALES-WH');
+        $foreignCustomerId = (string) Str::ulid();
+        DB::table('customers')->insert([
+            'id' => $foreignCustomerId,
+            'organization_id' => $orgB->id,
+            'code' => 'B-SALES-CUS',
+            'name' => 'Foreign Sales Customer',
+            'normalized_name' => 'foreign sales customer',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->expectException(QueryException::class);
+        DB::table('sales_invoices')->insert([
+            'id' => (string) Str::ulid(),
+            'organization_id' => $orgA->id,
+            'customer_id' => $foreignCustomerId,
+            'source_location_id' => $sourceLocationId,
+            'document_number' => 'A-SALES-INVALID-1',
+            'status' => 'draft',
+            'invoice_date' => now()->toDateString(),
+            'subtotal' => 0,
+            'discount' => 0,
+            'tax' => 0,
+            'total' => 0,
+            'paid_amount' => 0,
+            'balance_due' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     private function organizations(): array
     {
         return [
