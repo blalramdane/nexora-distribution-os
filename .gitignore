@@ -1,6 +1,8 @@
 # Dependencies
 /vendor/
 /node_modules/
+**/vendor/
+**/node_modules/
 
 # Environment
 .env
@@ -19,12 +21,17 @@
 dist/
 .next/
 .vite/
+*.tsbuildinfo
+/frontend/.npm-cache/
+/frontend/AGENTS.md
 
 # Local tooling
 .idea/
 .vscode/
 .DS_Store
 Thumbs.db
+/.tools/
+/.local-alpha-credentials.txt
 
 # Runtime
 *.log

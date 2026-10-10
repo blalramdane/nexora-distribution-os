@@ -19,9 +19,43 @@ NEXORA Distribution OS is a vertical SaaS operating system for field distributio
 - AI is added after reliable transactional data exists.
 - The legacy system is a future migration source, not an architecture dependency.
 
-## Current status
+## Current implementation status
 
-Planning and domain design are complete through UX architecture. Production implementation has **not** started yet.
+The repository contains an implemented **local-alpha foundation**, not a production-ready release. Current implementation includes Laravel API authentication and tenant context, product/customer/supplier master data, purchases and sales posting, stock movements and balances, payments and returns, trip/vehicle loading and settlement, route ordering, and a field-operation sync foundation. The Next.js Arabic RTL frontend includes pages for these workflows.
+
+The latest local verification recorded on 2026-10-10:
+
+- Backend feature suite: **43 tests passed, 302 assertions**.
+- Frontend production build: passed.
+- Frontend TypeScript check (`npm run lint`): passed.
+- Local frontend responds at `http://127.0.0.1:3017`.
+- Local API health responds at `http://127.0.0.1:8017/api/v1/health`.
+- Local development uses a project-specific SQLite database. The production MySQL migration gate, security review, real-data pilot, backup/restore, and end-to-end browser tests are not yet approved.
+
+Do not describe this version as production-ready until the release gates in `TASK_LOOP.md` are met. See `PROJECT_STATUS.md` for the active task and remaining gaps.
+
+## Local development
+
+Prerequisites: Windows, Node.js/npm, Composer, and PHP 8.3+. The current local setup has a project-scoped PHP runtime in `.tools/php83/` and uses SQLite to avoid touching any other local project database.
+
+Frontend:
+
+```powershell
+cd frontend
+npm ci
+npm run dev -- --hostname 127.0.0.1 --port 3017
+```
+
+Backend (in a second terminal; use the repository-scoped PHP runtime if it exists):
+
+```powershell
+cd backend
+..\.tools\php83\php.exe -c ..\.tools\php83\php.ini artisan serve --host=127.0.0.1 --port=8017
+```
+
+For the first local setup, copy `backend/.env.example` to `backend/.env`, set `APP_ENV=local`, set `DB_CONNECTION=sqlite`, and point `DB_DATABASE` to an absolute path ending in `backend/database/distribution-local.sqlite`. Then run `artisan key:generate`, `artisan migrate --seed`, and `artisan nexora:local-alpha`. The last command creates a local-only admin and starter records; its ignored `.local-alpha-credentials.txt` file contains the generated login details. It must never be committed or reused outside this machine.
+
+The frontend must have `frontend/.env.local` set to `NEXT_PUBLIC_API_URL=http://127.0.0.1:8017/api/v1`. Never point this local environment at another project's database or reuse its credentials. Local start/stop helper scripts are in `tools/` and refuse to take over occupied ports.
 
 ### Source of Truth
 

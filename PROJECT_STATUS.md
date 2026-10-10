@@ -1,11 +1,12 @@
 # Project Status — NEXORA Distribution OS
 
 ## Current phase
-Phase 1 — Backend Foundation / Database Implementation.
+Phase 1 — Local Alpha implementation and Batch 2 database review.
 
 ## Batch gate status
 - Batch 1 — Backend Foundation: **APPROVED**
-- Batch 2 — Database Core: **ACTIVE**
+- Batch 2 — Database Core: **IMPLEMENTED LOCALLY; PRODUCTION GATE NOT YET APPROVED**
+- Batches 3–10: meaningful implementation exists across API/frontend, but each batch still needs its formal review and remaining acceptance checks.
 
 ## Completed
 - Product vision and positioning
@@ -80,23 +81,32 @@ These must remain configurable and must not be guessed:
 - Credit-limit enforcement policy
 - Real workflow validation with representative data
 
-## Not implemented yet
-- Complete Batch 2 database schema
-- Authentication/session API
-- RBAC enforcement
-- Transaction engine
-- Catalog/inventory workflows
-- Purchasing/sales/finance workflows
-- Distribution workflows
-- Field PWA/offline sync
-- Admin frontend
-- Reports
-- WhatsApp/maps
-- AI/intelligence
-- Production deployment/observability
+## Local implementation evidence (2026-10-10)
+- 9 database migrations exist for identity, reference data, catalog/parties, locations, transaction infrastructure, commercial documents, distribution/sync/projections, Sanctum tokens, and average cost.
+- API currently exposes 35 routes under `/api/v1`, including login, tenant-protected master data, purchase/sale/payment/return posting, stock adjustments, trip/load/route/settlement, and field sync operations.
+- Backend feature suite: **43 passed, 302 assertions**.
+- Frontend production build: passed; TypeScript lint: passed.
+- Local frontend `http://127.0.0.1:3017`; local API `http://127.0.0.1:8017`.
+- Local database is isolated SQLite at `backend/database/distribution-local.sqlite`; it must not be treated as production data.
+- `php artisan nexora:local-alpha` creates a local-only administrator and starter master data idempotently. It inserts no artificial stock; stock must come from a posted purchase. Local login details are kept in an ignored machine-local file.
+- `tools/start-local.ps1` checks ports 8017/3017 and reuses healthy NEXORA services without taking over other processes. `tools/stop-local.ps1` targets only matching repository-specific commands.
+
+## Remaining before a controlled pilot
+- A safe, repeatable demo/local bootstrap with a documented login path and sample organization data.
+- Verify migrations and constraints on the target MySQL 8.4 engine, not SQLite alone.
+- Review/enforce the full permission matrix on every route; test cross-tenant reads/writes across all modules.
+- Verify all UI forms against API contracts, including loading/error states and session expiry.
+- Complete browser E2E tests for purchase → stock → vehicle load → trip sales/collection → settlement and returns.
+- Finish offline PWA install/update behavior, conflict UI, and field-device lifecycle review.
+- Audit ledger, costing, returns, tax/invoice, document numbering, and credit/negative-stock policies with the business owner.
+- Production deployment, secrets, backups/restore drill, observability, rate limits, load tests, and security review.
+- Validate with a real distribution company and reconcile opening balances before replacing any legacy workflow.
+
+## Product readiness statement
+**Local Alpha foundation only — not production-ready and not yet approved for live financial/inventory operations.** Do not market it as a finished system until the pilot and release gates pass.
 
 ## Important
 The old system is currently unavailable. Do not block development on it. Later, create a migration adapter and reconcile opening balances, inventory and historical transactions.
 
 ## Next active task
-TASK-004 — Implement complete Batch 2 database schema, constraints, indexes and repeatable reference-data seeders.
+TASK-004 validation gate — verify the full migration chain and constraints against MySQL 8.4, review tenant-scoped foreign keys and unique constraints, and correct any integrity gaps. Keep Batch 2 active until this passes and NEXORA AI reviews the evidence. Next local-Alpha priority: route-by-route RBAC enforcement and end-to-end browser verification.
