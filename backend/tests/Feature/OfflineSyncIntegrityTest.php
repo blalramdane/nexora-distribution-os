@@ -235,6 +235,60 @@ class OfflineSyncIntegrityTest extends TestCase
             ->assertJsonValidationErrors(['device_uuid']);
     }
 
+    public function test_direct_visit_rejects_trip_owned_by_another_rep(): void
+    {
+        [$organization, $owner, , $tripId, $customerId] = $this->fieldVisitFoundation();
+        $otherRep = User::query()->create([
+            'organization_id' => $organization->id,
+            'name' => 'Other Field Rep',
+            'email' => 'other-rep-' . Str::uuid() . '@nexora.test',
+            'phone' => '011' . random_int(10000000, 99999999),
+            'password' => 'secret-password',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($otherRep)->postJson('/api/v1/field/visits', [
+            'trip_id' => $tripId,
+            'customer_id' => $customerId,
+            'status' => 'visited',
+        ])->assertNotFound();
+
+        $this->assertSame(0, DB::table('customer_visits')
+            ->where('organization_id', $organization->id)
+            ->where('trip_id', $tripId)
+            ->where('customer_id', $customerId)
+            ->count());
+        $this->assertSame($owner->id, DB::table('trips')->where('id', $tripId)->value('rep_user_id'));
+    }
+
+    public function test_direct_visit_rejects_customer_not_assigned_to_trip(): void
+    {
+        [$organization, $user, , $tripId] = $this->fieldVisitFoundation();
+        $unassignedCustomerId = (string) Str::ulid();
+        DB::table('customers')->insert([
+            'id' => $unassignedCustomerId,
+            'organization_id' => $organization->id,
+            'code' => 'FIELD-U-' . substr($unassignedCustomerId, -6),
+            'name' => 'Unassigned Field Customer',
+            'normalized_name' => 'unassigned field customer',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user)->postJson('/api/v1/field/visits', [
+            'trip_id' => $tripId,
+            'customer_id' => $unassignedCustomerId,
+            'status' => 'visited',
+        ])->assertNotFound();
+
+        $this->assertDatabaseMissing('customer_visits', [
+            'organization_id' => $organization->id,
+            'trip_id' => $tripId,
+            'customer_id' => $unassignedCustomerId,
+        ]);
+    }
+
     private function fieldVisitFoundation(): array
     {
         [$organization, $user, $deviceUuid] = $this->foundation();
