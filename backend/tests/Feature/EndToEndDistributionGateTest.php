@@ -40,6 +40,36 @@ class EndToEndDistributionGateTest extends TestCase
         $this->assertSame('500.0000', number_format((float) $purchase['total'], 4, '.', ''));
         $this->assertSame('10.000000', $this->stock($organization->id, $productId, $warehouseId));
 
+        $adjustmentPayload = [
+            'product_id' => $productId,
+            'location_id' => $warehouseId,
+            'quantity_delta' => 1,
+            'reason' => 'Count correction',
+            'idempotency_key' => 'e2e-adjustment-001',
+        ];
+
+        $adjustment = $this->postJson('/api/v1/inventory/adjust', $adjustmentPayload)
+            ->assertCreated()
+            ->json();
+        $adjustmentReplay = $this->postJson('/api/v1/inventory/adjust', $adjustmentPayload)
+            ->assertCreated()
+            ->json();
+
+        $this->assertSame($adjustment['id'], $adjustmentReplay['id']);
+        $this->assertSame('11.000000', $this->stock($organization->id, $productId, $warehouseId));
+        $this->assertSame(1, DB::table('stock_movements')->where('organization_id', $organization->id)->where('source_document_type', 'stock_adjustment')->where('source_document_id', $adjustment['id'])->count());
+
+        $reversal = $this->postJson('/api/v1/inventory/adjust', [
+            'product_id' => $productId,
+            'location_id' => $warehouseId,
+            'quantity_delta' => -1,
+            'reason' => 'Correction reversal',
+            'idempotency_key' => 'e2e-adjustment-002',
+        ])->assertCreated()->json();
+
+        $this->assertSame('-1.000000', number_format((float)$reversal['quantity_delta'], 6, '.', ''));
+        $this->assertSame('10.000000', $this->stock($organization->id, $productId, $warehouseId));
+
         $trip = $this->postJson('/api/v1/trips', [
             'vehicle_id' => $vehicleId,
             'rep_user_id' => $user->id,
