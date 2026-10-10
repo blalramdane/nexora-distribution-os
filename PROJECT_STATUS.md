@@ -87,6 +87,7 @@ These must remain configurable and must not be guessed:
 - Backend feature suite: **48 passed, 317 assertions**.
 - Fresh SQLite migration lifecycle probe: **PASS** — migrate from empty DB, seed twice, roll back all migrations, migrate again, and seed again; the temporary probe database was removed.
 - Tenant composite-FK negative tests: **2 passed on MySQL 8.4 CI** for the initial constraint set. The expanded constraint set is awaiting its CI run. SQLite intentionally skips these engine-specific constraints to avoid table rebuilds dropping pre-existing CHECK constraints; SQLite is not evidence for this security gate.
+- User-role assignment pivot now carries `organization_id`; both Eloquent relationships automatically scope pivot writes/reads, and migration 11 backfills existing assignments while refusing to migrate pre-existing cross-tenant role assignments. MySQL composite FK validation for this new migration is pending CI.
 - Playwright browser E2E: **3 passed** (local Alpha login and real dashboard/API, offline field visit queue/reconnect sync, and Arabic PWA manifest/icon validation). Tests use isolated port 3027 and never reuse an existing server.
 - API routes now enforce role permissions across dashboard, catalog, customers, suppliers, inventory, purchases, sales, payments, returns, trips, field visits, and sync. Permissions are scoped to roles owned by the authenticated organization; offline sync additionally checks permission for the specific transaction type before device lookup or replay acknowledgement.
 - Inactive user accounts are rejected by tenant middleware even if a token still exists. Trip creation rejects vehicles, representatives, and origin locations owned by another organization.
@@ -117,7 +118,7 @@ On 2026-10-10, no local MySQL/MariaDB service was found and Docker CLI could not
 ## Database review findings (2026-10-10)
 - Confirmed: all 9 migrations pass a fresh SQLite lifecycle, including full rollback/re-migrate and repeatable reference-data seeding.
 - Confirmed: the existing GitHub Actions backend workflow defines a MySQL 8.4 service and migration/seed/rollback/test steps; current local commits have not been pushed, so that workflow has not verified these commits.
-- Follow-up integrity review: many tenant-owned relations still use single-column foreign keys (for example product → unit/category, document → party/location, trip → vehicle/representative). API-level tenant checks exist on key workflows, but the schema does not yet enforce organization equality for every such relation with composite tenant-scoped foreign keys. Complete this review before approving Batch 2; ordinary foreign-key existence alone is not proof of tenant isolation.
+- Follow-up integrity review: some nullable `SET NULL` relationships, global/shared reference data (such as units/geography), and polymorphic references (payment party, allocation document, ledger party/source) cannot be safely converted to composite tenant foreign keys without explicit domain/deletion-policy decisions. API-level checks cover key workflows; document and test these remaining exceptions before approving Batch 2.
 
 ## Important
 The old system is currently unavailable. Do not block development on it. Later, create a migration adapter and reconcile opening balances, inventory and historical transactions.

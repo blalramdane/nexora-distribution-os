@@ -1111,7 +1111,8 @@ Corrections verified during Batch 1:
 - Frontend lint/build and 3 Playwright browser smoke tests were previously verified on project-specific ports; frontend/API health endpoints still return HTTP 200.
 - MySQL 8.4 gate: **BLOCKED / NOT VERIFIED** on this workstation; no local MySQL service and Docker Desktop engine unavailable. Do not infer MySQL compatibility from SQLite results.
 - A remote GitHub Actions run using an isolated MySQL 8.4 service passed fresh migration, repeated seed, full rollback, re-migrate, final seed, and the full backend test suite for the initial composite-FK migration (`8b80e3a`). An expanded relationship set and a SQLite rollback portability correction are now queued for a second CI run; do not treat the earlier pass as validation of those later edits.
-- Schema review found tenant-owned relationships that still use single-column foreign keys without enforcing matching `organization_id`. API checks cover key paths, but Batch 2 cannot be approved until the remaining database-level tenant-boundary review is closed with tests.
+- Migration 11 now scopes the `user_roles` pivot to `organization_id` and refuses to backfill cross-tenant role assignments; `User::roles()` and `Role::users()` write/filter the organization key. Its MySQL validation is pending a fresh CI run.
+- Remaining schema exceptions: nullable `SET NULL` relations, global/shared units/geography, and polymorphic party/document/source references need explicit domain/deletion-policy decisions before adding safe composite constraints. Batch 2 stays active until those exceptions are documented and tested.
 
 ## Next correction task
 1. Provision or access an isolated MySQL 8.4 test service without starting/reconfiguring shared Docker or another project's database.

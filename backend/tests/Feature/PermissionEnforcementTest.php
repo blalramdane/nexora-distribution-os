@@ -7,6 +7,8 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -60,6 +62,10 @@ class PermissionEnforcementTest extends TestCase
             'key' => 'manager',
         ]);
         $foreignRole->permissions()->attach($permission->id);
+
+        if (DB::getDriverName() === 'mysql') {
+            $this->expectException(QueryException::class);
+        }
         $user->roles()->attach($foreignRole->id);
 
         $this->actingAs($user, 'sanctum')
