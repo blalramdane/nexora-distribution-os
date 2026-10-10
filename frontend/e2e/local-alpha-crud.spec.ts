@@ -183,13 +183,24 @@ test("local Alpha can create master data, post a purchase, and reconcile a sale 
   await page.getByRole("button", { name: "تسجيل العملية" }).click();
   await expect(page.getByText("تم تسجيل التحصيل وتخصيصه للفاتورة وتحديث رصيد العميل.")).toBeVisible();
 
-  // Reload the trip, verify the physical closing balance, and settle the 25 EGP collected.
+  // Post a trip expense before settlement; it must reduce expected cash exactly once.
   await page.goto("/trips");
   await page.locator("select").nth(2).selectOption(trip.id);
   await expect(page.getByLabel(`رصيد التسوية ${productName}`)).toHaveValue("2");
-  await page.getByLabel("النقدية الفعلية").fill("25.00");
+  const expenseAccount = page.getByLabel("الحساب المالي للمصروف");
+  await expect(expenseAccount.locator("option").filter({ hasText: "الخزنة التجريبية" })).toHaveCount(1);
+  await expenseAccount.selectOption({ label: "الخزنة التجريبية" });
+  await page.getByLabel("نوع المصروف").fill("وقود E2E");
+  await page.getByLabel("قيمة المصروف").fill("5.00");
+  await page.getByRole("button", { name: "تسجيل مصروف الرحلة" }).click();
+  await expect(page.getByText(/تم تسجيل مصروف وقود E2E بقيمة .* EGP/)).toBeVisible();
+  await expect(page.getByText("وقود E2E", { exact: true })).toBeVisible();
+
+  // Cash received was 25 EGP; the 5 EGP posted trip expense leaves 20 EGP expected.
+  await page.getByLabel("النقدية الفعلية").fill("20.00");
   await page.getByRole("button", { name: "إغلاق وتسوية الرحلة" }).click();
   await expect(page.getByText(/تمت التسوية/)).toBeVisible();
+  await expect(page.getByText(/المتوقع 20(?:\.0+)? EGP/)).toBeVisible();
   await expect(page.getByText(/فرق النقدية 0(?:\.0+)? EGP/)).toBeVisible();
 
   await page.goto("/inventory");

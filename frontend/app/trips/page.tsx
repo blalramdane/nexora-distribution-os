@@ -13,9 +13,12 @@ type ClosingLine={product_id:string;name_ar:string;quantity:number};
 type Trip={id:string;trip_number:string;status:string;trip_date:string;vehicle_name:string;rep_name:string};
 type Me={id:string;name:string};
 type RouteCustomer={customer_id:string;sequence:number;visit_status:string;code:string;name:string;phone?:string;address_text?:string;primary_address?:string;latitude?:number|null;longitude?:number|null};
+type FinancialAccount={id:string;code:string;name:string;currency?:string};
+type TripExpense={id:string;category:string;amount:string|number;expense_date:string;notes?:string|null;financial_account_name:string};
 
 export default function Trips(){
  const [products,setProducts]=useState<Product[]>([]),[loadLines,setLoadLines]=useState<LoadLine[]>([]),[closingLines,setClosingLines]=useState<ClosingLine[]>([]),[actualCash,setActualCash]=useState(""),[loadMsg,setLoadMsg]=useState(""),[loadQuery,setLoadQuery]=useState(""),[vehicles,setVehicles]=useState<Vehicle[]>([]),[locations,setLocations]=useState<Location[]>([]),[customers,setCustomers]=useState<Customer[]>([]),[trips,setTrips]=useState<Trip[]>([]),[vehicle,setVehicle]=useState(""),[location,setLocation]=useState(""),[customer,setCustomer]=useState(""),[selected,setSelected]=useState<Trip|null>(null),[me,setMe]=useState<Me|null>(null),[msg,setMsg]=useState(""),[routeCustomers,setRouteCustomers]=useState<RouteCustomer[]>([]),[routeMsg,setRouteMsg]=useState(""),[loadingError,setLoadingError]=useState("");
+ const [expenseAccounts,setExpenseAccounts]=useState<FinancialAccount[]>([]),[tripExpenses,setTripExpenses]=useState<TripExpense[]>([]),[expenseAccountId,setExpenseAccountId]=useState(""),[expenseCategory,setExpenseCategory]=useState("وقود"),[expenseAmount,setExpenseAmount]=useState(""),[expenseDate,setExpenseDate]=useState(()=>new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10)),[expenseNotes,setExpenseNotes]=useState(""),[expenseMsg,setExpenseMsg]=useState(""),[expenseSaving,setExpenseSaving]=useState(false);
 
  const load=()=>api<Trip[]>("/trips").then(setTrips).catch(e=>setLoadingError((e as Error).message));
  const loadRoute=(tripId:string)=>api<RouteCustomer[]>(`/trips/${tripId}/route`).then(setRouteCustomers).catch(e=>setRouteMsg((e as Error).message));
@@ -24,7 +27,10 @@ export default function Trips(){
   Promise.all([api<Vehicle[]>("/vehicles"),api<Location[]>("/locations"),api<Customer[]>("/customers"),api<Product[]>("/products"),api<Me>("/auth/me"),api<Trip[]>("/trips")]).then(([v,l,c,p,m,t])=>{setVehicles(v);setVehicle(v[0]?.id||"");setLocations(l);setLocation(l[0]?.id||"");setCustomers(c);setProducts(p);setMe(m);setTrips(t);setLoadingError("")}).catch(e=>setLoadingError((e as Error).message));
  },[]);
 
- const selectTrip=(t:Trip)=>{setSelected(t);loadRoute(t.id);refreshClosing(t.id)};
+ useEffect(()=>{api<{accounts:FinancialAccount[];payment_methods:unknown[] }>("/finance/references").then(ref=>{setExpenseAccounts(ref.accounts);setExpenseAccountId(current=>current||ref.accounts[0]?.id||"")}).catch(e=>setExpenseMsg((e as Error).message))},[]);
+
+ const loadTripExpenses=(tripId:string)=>api<TripExpense[]>(`/expenses?trip_id=${encodeURIComponent(tripId)}`).then(setTripExpenses).catch(e=>setExpenseMsg((e as Error).message));
+ const selectTrip=(t:Trip)=>{setSelected(t);loadRoute(t.id);refreshClosing(t.id);setExpenseMsg("");loadTripExpenses(t.id)};
 
  const refreshClosing=(tripId:string)=>api<{product_id:string;name_ar:string;quantity_base:number}[]>(`/trips/${tripId}/stock`).then(rows=>setClosingLines(rows.map(r=>({product_id:r.product_id,name_ar:r.name_ar,quantity:Number(r.quantity_base)})))).catch(()=>setClosingLines([]));
 
@@ -69,7 +75,19 @@ export default function Trips(){
 
  const settle=async()=>{
   if(!selected||actualCash===""||!Number.isFinite(Number(actualCash))||Number(actualCash)<0)return setLoadMsg("اختار الرحلة وأدخل نقدية فعلية صحيحة لا تقل عن صفر.");
-  try{const result=await api<{expected_cash:number;cash_variance:number;stock_variance_value:number}>("/trip-settlements",{method:"POST",body:JSON.stringify({trip_id:selected.id,actual_cash:Number(actualCash),opening_cash:0,closing_items:closingLines.map(l=>({product_id:l.product_id,quantity_base:l.quantity}))})});setLoadMsg(`تمت التسوية — المتوقع ${result.expected_cash} EGP، فرق النقدية ${result.cash_variance} EGP`);load()}catch(e){setLoadMsg((e as Error).message)}
+  try{const result=await api<{expected_cash:number;cash_variance:number;stock_variance_value:number}>("/trip-settlements",{method:"POST",body:JSON.stringify({trip_id:selected.id,actual_cash:Number(actualCash),opening_cash:0,closing_items:closingLines.map(l=>({product_id:l.product_id,quantity_base:l.quantity}))})});setLoadMsg(`تمت التسوية — المتوقع ${result.expected_cash} EGP، فرق النقدية ${result.cash_variance} EGP`);setSelected(current=>current&&current.id===selected.id?{...current,status:"completed"}:current);load()}catch(e){setLoadMsg((e as Error).message)}
+ };
+
+ const postExpense=async()=>{
+  if(!selected)return setExpenseMsg("اختار الرحلة الأول.");
+  if(["completed","cancelled"].includes(selected.status))return setExpenseMsg("لا يمكن إضافة مصروف لرحلة مقفولة.");
+  if(!expenseCategory.trim()||!expenseAccountId||expenseAmount===""||!Number.isFinite(Number(expenseAmount))||Number(expenseAmount)<=0||!expenseDate)return setExpenseMsg("أكمل نوع المصروف والحساب والمبلغ والتاريخ الصحيح.");
+  setExpenseSaving(true);setExpenseMsg("");
+  try{
+   const result=await api<{id:string;amount:string|number;category:string}>("/expenses",{method:"POST",body:JSON.stringify({trip_id:selected.id,financial_account_id:expenseAccountId,category:expenseCategory.trim(),amount:Number(expenseAmount),expense_date:expenseDate,notes:expenseNotes.trim()||undefined,idempotency_key:crypto.randomUUID()})});
+   setExpenseAmount("");setExpenseNotes("");setExpenseMsg(`تم تسجيل مصروف ${result.category} بقيمة ${Number(result.amount).toLocaleString("ar-EG")} EGP.`);
+   await loadTripExpenses(selected.id);
+  }catch(e){setExpenseMsg((e as Error).message)}finally{setExpenseSaving(false)}
  };
 
  return <main className="main">
@@ -115,7 +133,24 @@ export default function Trips(){
 
     <section className="card" style={{marginTop:14}}><div className="panel-title"><span>تحميل العربية</span><span className="badge blue">{loadLines.length} أصناف</span></div><input className="field" value={loadQuery} onChange={e=>setLoadQuery(e.target.value)} placeholder="ابحث بالصنف أو SKU للتحميل..."/><div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:8}}>{products.filter(p=>!loadQuery||(p.name_ar+" "+p.sku).toLocaleLowerCase().includes(loadQuery.trim().toLocaleLowerCase())).slice(0,12).map(p=><button key={p.id} type="button" className="secondary" onClick={()=>addLoad(p)} style={{fontSize:9}}>{p.name_ar} · {p.sku}</button>)}</div>{loadLines.map((l,i)=><div key={l.product.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #eef2f7",fontSize:10}}><span>{l.product.name_ar}</span><input aria-label={`كمية تحميل ${l.product.name_ar}`} type="number" min="1" value={l.quantity} onChange={e=>setLoadLines(x=>x.map((v,j)=>j===i?{...v,quantity:Number(e.target.value)}:v))} style={{width:70,padding:5,border:"1px solid #e2e8f0",borderRadius:6}}/></div>)}<button className="primary" disabled={!selected||!location||loadLines.length===0} onClick={postLoad} style={{marginTop:10}}>تحميل العربية</button></section>
 
-    <section className="card" style={{marginTop:14}}><div className="panel-title"><span>تسوية الرحلة</span><span className="badge amber">Settlement</span></div>{closingLines.map((l,i)=><div key={l.product_id} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #eef2f7",fontSize:10}}><span>{l.name_ar}</span><input aria-label={`رصيد التسوية ${l.name_ar}`} type="number" min="0" value={l.quantity} onChange={e=>setClosingLines(x=>x.map((v,j)=>j===i?{...v,quantity:Number(e.target.value)}:v))} style={{width:75,padding:5,border:"1px solid #e2e8f0",borderRadius:6}}/></div>)}<label className="metric-label">النقدية الفعلية</label><input aria-label="النقدية الفعلية" className="field" type="number" min="0" step="0.01" value={actualCash} onChange={e=>setActualCash(e.target.value)} placeholder="0.00" style={{marginTop:6}}/><button className="primary" disabled={!selected} onClick={settle} style={{marginTop:10}}>إغلاق وتسوية الرحلة</button>{loadMsg&&<div role="status" className="badge blue" style={{marginTop:10,whiteSpace:"normal"}}>{loadMsg}</div>}</section>
+    <section className="card" style={{marginTop:14}}><div className="panel-title"><span>تسوية الرحلة</span><span className="badge amber">Settlement</span></div>{closingLines.map((l,i)=><div key={l.product_id} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #eef2f7",fontSize:10}}><span>{l.name_ar}</span><input aria-label={`رصيد التسوية ${l.name_ar}`} type="number" min="0" value={l.quantity} onChange={e=>setClosingLines(x=>x.map((v,j)=>j===i?{...v,quantity:Number(e.target.value)}:v))} style={{width:75,padding:5,border:"1px solid #e2e8f0",borderRadius:6}}/></div>)}<label className="metric-label">النقدية الفعلية</label><input aria-label="النقدية الفعلية" className="field" type="number" min="0" step="0.01" value={actualCash} onChange={e=>setActualCash(e.target.value)} placeholder="0.00" style={{marginTop:6}}/><button className="primary" disabled={!selected||["completed","cancelled"].includes(selected.status)} onClick={settle} style={{marginTop:10}}>إغلاق وتسوية الرحلة</button>{loadMsg&&<div role="status" className="badge blue" style={{marginTop:10,whiteSpace:"normal"}}>{loadMsg}</div>}</section>
+
+    <section className="card" style={{marginTop:14}}>
+     <div className="panel-title"><span>مصروفات الرحلة</span><span className="badge blue">{tripExpenses.reduce((sum,item)=>sum+Number(item.amount),0).toLocaleString("ar-EG")} EGP</span></div>
+     {!selected&&<div style={{color:"#64748b",fontSize:11,marginBottom:10}}>اختار رحلة علشان تسجّل مصروفًا مرتبطًا بها ويظهر في التسوية.</div>}
+     <div className="form-grid">
+      <label>نوع المصروف<input aria-label="نوع المصروف" value={expenseCategory} onChange={e=>setExpenseCategory(e.target.value)} maxLength={128} placeholder="وقود، طريق، صيانة..." disabled={!selected||expenseSaving||["completed","cancelled"].includes(selected?.status||"")}/></label>
+      <label>الحساب المالي للمصروف<select aria-label="الحساب المالي للمصروف" value={expenseAccountId} onChange={e=>setExpenseAccountId(e.target.value)} disabled={!selected||expenseSaving||!expenseAccounts.length}>{expenseAccounts.map(a=><option key={a.id} value={a.id}>{a.name} — {a.code}</option>)}</select></label>
+      <label>قيمة المصروف<input aria-label="قيمة المصروف" type="number" min="0.01" step="0.01" value={expenseAmount} onChange={e=>setExpenseAmount(e.target.value)} placeholder="0.00" disabled={!selected||expenseSaving||["completed","cancelled"].includes(selected?.status||"")}/></label>
+      <label>تاريخ المصروف<input aria-label="تاريخ المصروف" type="date" value={expenseDate} onChange={e=>setExpenseDate(e.target.value)} disabled={!selected||expenseSaving||["completed","cancelled"].includes(selected?.status||"")}/></label>
+      <label style={{gridColumn:"1 / -1"}}>ملاحظات (اختياري)<input aria-label="ملاحظات المصروف" value={expenseNotes} onChange={e=>setExpenseNotes(e.target.value)} maxLength={2000} placeholder="رقم الإيصال أو وصف المصروف" disabled={!selected||expenseSaving||["completed","cancelled"].includes(selected?.status||"")}/></label>
+     </div>
+     <button className="primary" disabled={!selected||expenseSaving||!expenseAccounts.length||["completed","cancelled"].includes(selected?.status||"")} onClick={postExpense} style={{marginTop:10,width:"100%"}}>{expenseSaving?"جاري التسجيل...":"تسجيل مصروف الرحلة"}</button>
+     {expenseMsg&&<div role="status" className="badge blue" style={{display:"block",marginTop:10,padding:10,whiteSpace:"normal"}}>{expenseMsg}</div>}
+     {selected&&tripExpenses.map(e=><div key={e.id} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"9px 0",borderBottom:"1px solid #eef2f7",fontSize:11}}><span><strong>{e.category}</strong><small style={{display:"block",color:"#64748b"}}>{e.expense_date} · {e.financial_account_name}{e.notes ? " · " + e.notes : ""}</small></span><strong>{Number(e.amount).toLocaleString("ar-EG")} EGP</strong></div>)}
+     {selected&&!tripExpenses.length&&<div style={{padding:10,color:"#64748b",fontSize:11}}>لا توجد مصروفات مسجلة للرحلة المختارة.</div>}
+    </section>
+
    </section>
   </div>
  </main>
