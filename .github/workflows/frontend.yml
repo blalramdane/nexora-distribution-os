@@ -4,15 +4,19 @@ on:
   push:
     paths:
       - "frontend/**"
+      - "backend/**"
       - ".github/workflows/frontend.yml"
   pull_request:
     paths:
       - "frontend/**"
+      - "backend/**"
       - ".github/workflows/frontend.yml"
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:8017/api/v1
     defaults:
       run:
         working-directory: frontend
@@ -21,6 +25,43 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, bcmath, pdo_sqlite, sqlite3, intl
+          coverage: none
+      - name: Install backend dependencies
+        working-directory: backend
+        run: composer install --no-interaction --prefer-dist
+      - name: Bootstrap isolated SQLite Alpha
+        working-directory: backend
+        run: |
+          cp .env.example .env
+          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env
+          sed -i 's|^DB_DATABASE=.*|DB_DATABASE=database/database.sqlite|' .env
+          mkdir -p database
+          touch database/database.sqlite
+          php artisan key:generate
+          php artisan migrate --force
+          php artisan db:seed --force
+          if ! php artisan nexora:local-alpha > /tmp/nexora-alpha-bootstrap.log 2>&1; then
+            cat /tmp/nexora-alpha-bootstrap.log
+            exit 1
+          fi
+      - name: Start backend API
+        working-directory: backend
+        run: |
+          php artisan serve --host=127.0.0.1 --port=8017 > /tmp/nexora-api.log 2>&1 &
+          echo $! > /tmp/nexora-api.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8017/api/v1/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/nexora-api.log
+          exit 1
       - run: npm install
       - run: npx playwright install --with-deps chromium
       - run: npm run lint
