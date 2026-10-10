@@ -22,9 +22,13 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const response = await fetch(`${API_URL}${path}`, { ...options, headers });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    if (response.status === 401 && typeof window !== "undefined" && token) {
-      localStorage.removeItem("nexora_token");
-      if (window.location.pathname !== "/login") window.location.assign("/login?reason=session-expired");
+    if (response.status === 401 && typeof window !== "undefined" && path !== "/auth/login") {
+      if (token) localStorage.removeItem("nexora_token");
+      // Protected pages must never remain open with empty data when no session exists.
+      if (window.location.pathname !== "/login") {
+        const reason = token ? "session-expired" : "login-required";
+        window.location.assign(`/login?reason=${reason}`);
+      }
     }
     const validation = payload?.errors && typeof payload.errors === "object"
       ? Object.values(payload.errors).flat().join(" ")
