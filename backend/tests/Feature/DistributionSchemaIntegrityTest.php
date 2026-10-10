@@ -33,6 +33,10 @@ class DistributionSchemaIntegrityTest extends TestCase
 
     public function test_packaging_conversion_must_be_positive(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            $this->markTestSkipped('The ALTER TABLE CHECK constraint is enforced by the production MySQL 8.4 engine.');
+        }
+
         $this->expectException(\Illuminate\Database\QueryException::class);
 
         DB::table('organizations')->insert([

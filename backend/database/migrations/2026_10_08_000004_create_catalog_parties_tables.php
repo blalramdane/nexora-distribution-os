@@ -147,7 +147,11 @@ return new class extends Migration
             $table->index(['organization_id', 'customer_id']);
         });
 
-        DB::statement("ALTER TABLE product_packagings ADD CONSTRAINT chk_packaging_conversion_positive CHECK (conversion_to_base > 0)");
+        // MySQL 8.4 supports adding CHECK constraints after table creation; SQLite does not.
+        // MySQL remains the authoritative engine for database-level CHECK enforcement.
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE product_packagings ADD CONSTRAINT chk_packaging_conversion_positive CHECK (conversion_to_base > 0)");
+        }
 
         Schema::create('customer_location_events', function (Blueprint $table): void {
             $table->ulid('id')->primary();
