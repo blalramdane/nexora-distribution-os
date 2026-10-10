@@ -13,7 +13,7 @@ class LocationController extends Controller
         return response()->json(
             DB::table('locations')
                 ->where('organization_id', $request->user()->organization_id)
-                ->where('active', true)
+                ->where('status', 'active')
                 ->orderBy('name')
                 ->get()
         );

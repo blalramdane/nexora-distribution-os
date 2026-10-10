@@ -1106,10 +1106,11 @@ Corrections verified during Batch 1:
 **ACTIVE / IMPLEMENTATION IN PROGRESS**
 
 ## Latest local verification — 2026-10-10
-- `backend`: `php artisan test --no-ansi` — **48 passed, 317 assertions** on the project's isolated SQLite database.
+- `backend`: `php artisan test --no-ansi` — **50 passed, 323 assertions** on the project's isolated SQLite database; 3 MySQL-only composite-FK tests skip on SQLite by design.
 - Isolated migration lifecycle probe — **PASS**: fresh migrate, seed twice, full rollback, migrate again, final seed. Temporary probe database removed.
-- Frontend lint/build and 3 Playwright browser smoke tests were previously verified on project-specific ports; frontend/API health endpoints still return HTTP 200.
-- MySQL 8.4 gate: **BLOCKED / NOT VERIFIED** on this workstation; no local MySQL service and Docker Desktop engine unavailable. Do not infer MySQL compatibility from SQLite results.
+- Frontend TypeScript check and production build passed. Playwright E2E: **4 passed**, including browser login, UI CRUD for product/supplier/customer, purchase receipt updating stock, sale reducing stock 1 → 0, offline field queue/reconnect, and PWA validation. E2E uses isolated port 3027 and clearly labeled demo records remain in local SQLite.
+- Root cause fixed: location listing queried a non-existent `locations.active` column; the real schema exposes `locations.status`. `LocationMasterTest` now protects this endpoint. Laravel API exception configuration also prevents browser-style unauthenticated API requests from redirecting to an undefined web `login` route.
+- MySQL 8.4 gate passed through isolated GitHub Actions using MySQL 8.4.11 on commit `0c89ee7`; no local MySQL service or available Docker Desktop engine is required. Continue running CI for future schema/migration changes.
 - GitHub Actions on an isolated MySQL **8.4.11** service passed all database lifecycle gates and the full backend suite on commit `0c89ee7`: **51 passed, 317 assertions**.
 - The MySQL suite includes three negative cross-tenant insertion tests (trip/customer assignment, stock/product-location mismatch, sales invoice/customer mismatch). The end-to-end distribution gate also passed in the same MySQL run.
 - Migration 11 scopes the `user_roles` pivot to `organization_id`, backfills existing assignments, and refuses migration if user/role organizations disagree. `User::roles()` and `Role::users()` write/filter the organization key.
@@ -1117,10 +1118,10 @@ Corrections verified during Batch 1:
 - Remaining schema exceptions: nullable `SET NULL` relations, global/shared units/geography, and polymorphic party/document/source references need explicit domain/deletion-policy decisions before adding safe composite constraints. Batch 2 stays active until those exceptions are documented and tested.
 
 ## Next correction task
-1. Provision or access an isolated MySQL 8.4 test service without starting/reconfiguring shared Docker or another project's database.
-2. Run the exact lifecycle from `.github/workflows/backend.yml` on the current commit set.
-3. Inventory tenant-owned foreign-key pairs; add composite tenant-scoped constraints/indexes where compatible with the domain model, plus negative cross-tenant insertion tests.
-4. Re-run SQLite and MySQL lifecycle/test gates and update this evidence section.
+1. Review/document the remaining nullable `SET NULL`, shared/global reference data, and polymorphic finance relations; add safe tenant checks and negative tests where the domain permits.
+2. Extend browser E2E to vehicle loading, trip sales/collections, settlement, and returns.
+3. Keep the MySQL 8.4.11 CI gate required for every future migration/schema change; do not start shared Docker/MySQL services on the developer workstation.
+4. Re-run the full backend, browser E2E, TypeScript and production build gates and update this evidence section.
 
 ## Batch 2 gate
 Do not activate Batch 3 until:

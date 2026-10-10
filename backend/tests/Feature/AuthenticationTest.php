@@ -14,6 +14,13 @@ class AuthenticationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_unauthenticated_api_requests_without_accept_header_still_return_json_401(): void
+    {
+        $this->get('/api/v1/products')
+            ->assertUnauthorized()
+            ->assertHeader('content-type', 'application/json');
+    }
+
     public function test_user_can_login_and_access_protected_endpoint_with_roles_and_permissions(): void
     {
         $organization = Organization::query()->create([

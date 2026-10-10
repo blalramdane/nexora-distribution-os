@@ -1,11 +1,22 @@
 import { expect, test } from "@playwright/test";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
-const organizationId = process.env.NEXORA_E2E_ORG;
-const login = process.env.NEXORA_E2E_LOGIN;
-const password = process.env.NEXORA_E2E_PASSWORD;
+function localCredential(label: string): string | undefined {
+  const envKey = `NEXORA_E2E_${label.toUpperCase().replaceAll(" ", "_")}`;
+  if (process.env[envKey]) return process.env[envKey];
+  const file = resolve(process.cwd(), "..", ".local-alpha-credentials.txt");
+  if (!existsSync(file)) return undefined;
+  const line = readFileSync(file, "utf8").split(/\r?\n/).find((entry) => entry.startsWith(`${label}:`));
+  return line?.slice(label.length + 1).trim();
+}
+
+const organizationId = localCredential("Organization ID");
+const login = localCredential("Login email");
+const password = localCredential("Password");
 
 test("local Alpha user can log in and load the real dashboard", async ({ page }) => {
-  test.skip(!organizationId || !login || !password, "Set NEXORA_E2E_ORG, NEXORA_E2E_LOGIN and NEXORA_E2E_PASSWORD for a local API smoke test.");
+  test.skip(!organizationId || !login || !password, "Local Alpha credentials are missing; set the NEXORA_E2E variables or run the local-alpha bootstrap.");
 
   await page.goto("/login");
   await page.getByLabel("Organization ID").fill(organizationId!);

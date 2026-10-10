@@ -84,13 +84,15 @@ These must remain configurable and must not be guessed:
 ## Local implementation evidence (2026-10-10)
 - 9 database migrations exist for identity, reference data, catalog/parties, locations, transaction infrastructure, commercial documents, distribution/sync/projections, Sanctum tokens, and average cost.
 - API currently exposes 35 routes under `/api/v1`, including login, tenant-protected master data, purchase/sale/payment/return posting, stock adjustments, trip/load/route/settlement, and field sync operations.
-- Backend feature suite: **48 passed, 317 assertions**.
+- Backend feature suite: **50 passed, 323 assertions** on isolated local SQLite; **3 MySQL-only composite-FK tests skipped by design** on SQLite.
 - Fresh SQLite migration lifecycle probe: **PASS** — migrate from empty DB, seed twice, roll back all migrations, migrate again, and seed again; the temporary probe database was removed.
 - MySQL 8.4 CI (MySQL **8.4.11**, commit `0c89ee7`): **all lifecycle steps passed** — fresh migration, seed twice, full rollback, re-migrate, final seed, and test run.
 - MySQL backend suite: **51 passed, 317 assertions**, including 3 negative cross-tenant database constraint tests and the end-to-end distribution workflow.
 - SQLite backend suite: **48 passed, 317 assertions; 3 MySQL-only constraint tests skipped by design**. SQLite intentionally skips these engine-specific constraints to avoid table rebuilds dropping pre-existing CHECK constraints; SQLite is not evidence for the MySQL security gate.
 - User-role assignment pivot now carries `organization_id`; both Eloquent relationships automatically scope pivot writes/reads, and migration 11 backfills existing assignments while refusing to migrate pre-existing cross-tenant role assignments.
-- Playwright browser E2E: **3 passed** (local Alpha login and real dashboard/API, offline field visit queue/reconnect sync, and Arabic PWA manifest/icon validation). Tests use isolated port 3027 and never reuse an existing server.
+- Playwright browser E2E: **4 passed** on isolated port 3027 (Local Alpha login, create product/supplier/customer in the UI, post purchase then sale and verify stock 1 → 0, offline field visit queue/reconnect sync, and Arabic PWA validation). Test data is labeled with `E2E-` / `آلي` and remains in the local demo database.
+- Fixed a confirmed master-data/API blocker: `LocationController` filtered by a nonexistent `locations.active` field while the schema uses `locations.status`; the endpoint now filters `status=active` and has a regression test.
+- API bootstrap now returns JSON `401` for unauthenticated `/api/*` requests even when the client omits `Accept: application/json`, preventing Laravel from redirecting to the undefined web `login` route and returning `500`.
 - API routes now enforce role permissions across dashboard, catalog, customers, suppliers, inventory, purchases, sales, payments, returns, trips, field visits, and sync. Permissions are scoped to roles owned by the authenticated organization; offline sync additionally checks permission for the specific transaction type before device lookup or replay acknowledgement.
 - Inactive user accounts are rejected by tenant middleware even if a token still exists. Trip creation rejects vehicles, representatives, and origin locations owned by another organization.
 - Added automated tests for permission denial/grant, foreign-organization role isolation and response filtering, offline sync privilege escalation, and cross-tenant trip creation.
@@ -105,7 +107,7 @@ These must remain configurable and must not be guessed:
 - Verify migrations and constraints on the target MySQL 8.4 engine, not SQLite alone.
 - Expand cross-tenant and permission tests to all remaining resource types and review the final role matrix with the business owner.
 - Verify all UI forms against API contracts, including loading/error states and session expiry.
-- Complete browser E2E tests for purchase → stock → vehicle load → trip sales/collection → settlement and returns. Current browser E2E covers the offline field workflow and PWA manifest.
+- Complete browser E2E tests for vehicle load → trip sales/collection → settlement and returns. The browser now verifies catalog/customer/supplier creation and purchase → stock → sale → zero closing stock; vehicle/trip settlement is still covered by backend integration tests, not by browser E2E.
 - Finish offline PWA install/update behavior, conflict UI, and field-device lifecycle review.
 - Audit ledger, costing, returns, tax/invoice, document numbering, and credit/negative-stock policies with the business owner.
 - Production deployment, secrets, backups/restore drill, observability, rate limits, load tests, and security review.
@@ -115,7 +117,7 @@ These must remain configurable and must not be guessed:
 **Local Alpha foundation only — not production-ready and not yet approved for live financial/inventory operations.** Do not market it as a finished system until the pilot and release gates pass.
 
 ## Environment limitation
-On 2026-10-10, no local MySQL/MariaDB service was found and Docker CLI could not connect to the Docker Desktop engine. PHP's PDO MySQL driver is installed, but there is no MySQL server listening locally. The MySQL 8.4 migration gate remains untested; do not infer MySQL compatibility from passing SQLite tests.
+On 2026-10-10, no local MySQL/MariaDB service was found and Docker CLI could not connect to the Docker Desktop engine. PHP's PDO MySQL driver is installed, but there is no MySQL server listening locally. The MySQL 8.4 migration gate passed in isolated GitHub Actions (MySQL 8.4.11, commit `0c89ee7`); this local controller/bootstrap correction does not change schema, but future schema changes still require the MySQL CI gate.
 
 ## Database review findings (2026-10-10)
 - Confirmed: all 9 migrations pass a fresh SQLite lifecycle, including full rollback/re-migrate and repeatable reference-data seeding.
@@ -126,4 +128,4 @@ On 2026-10-10, no local MySQL/MariaDB service was found and Docker CLI could not
 The old system is currently unavailable. Do not block development on it. Later, create a migration adapter and reconcile opening balances, inventory and historical transactions.
 
 ## Next active task
-TASK-004 validation gate — obtain an isolated MySQL 8.4 test server without starting or modifying shared project services, run the full migration/seed/rollback/test workflow on the current commits, then close the composite tenant-foreign-key review with negative tests. Keep Batch 2 active until these gates pass and NEXORA AI reviews the evidence. Next local-Alpha priority: browser-based end-to-end verification of purchase → stock → vehicle load → route → sale → collection → settlement, followed by offline conflict handling review.
+TASK-004 validation gate — close the remaining domain/deletion-policy decisions for nullable `SET NULL`, shared reference data, and polymorphic finance references; keep Batch 2 active until the exceptions are documented/tested and NEXORA AI reviews the evidence. Next local-Alpha priority: browser-based verification of vehicle loading → trip sale/collection → settlement and returns, followed by offline conflict handling review.
