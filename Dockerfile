@@ -1,5 +1,4 @@
-# syntax=docker/dockerfile:1
-# Local container build for NEXORA Distribution OS.
+# syntax directive removed: hosted builder parses plain Dockerfile instructions only.
 # The API and Next.js UI are separate services; no .env or user SQLite file is copied.
 
 # ---------- Shared PHP 8.3 runtime ----------
