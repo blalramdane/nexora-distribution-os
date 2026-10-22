@@ -110,7 +110,7 @@ RUN mkdir -p \
 # Do not bake secrets into an image or generate a shared key while building it.
 USER www-data
 EXPOSE 8000
-# Run idempotent production migrations at container boot; `artisan serve` then
-# takes over. Failed migrations keep the old image running (blitz keeps the
-# previous container until a new one is proven).
-CMD ["sh", "-c", "php artisan migrate --force && exec php artisan serve --host=0.0.0.0 --port=8000"]
+# APP_KEY is never passed on the command line or logged. When the runtime has
+# no APP_KEY, the container generates one once and persists it in the kept
+# storage folder so it stays stable across restarts and rebuilds.
+CMD ["sh", "-c", "if [ -z \"$APP_KEY\" ]; then if [ -f /var/www/html/storage/secrets/app-key ]; then export APP_KEY=$(cat /var/www/html/storage/secrets/app-key); else mkdir -p /var/www/html/storage/secrets && php -r 'file_put_contents(\"/var/www/html/storage/secrets/app-key\", \"base64:\" . base64_encode(random_bytes(32)));' && export APP_KEY=$(cat /var/www/html/storage/secrets/app-key); fi; fi && php artisan migrate --force && exec php artisan serve --host=0.0.0.0 --port=8000"]
