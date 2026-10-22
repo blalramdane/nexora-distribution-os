@@ -15,7 +15,6 @@ export class ApiError extends Error {
     this.retryAfterSeconds = retryAfterSeconds;
   }
 }
-
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem("nexora_token") : null;
   const headers = new Headers(options.headers);
