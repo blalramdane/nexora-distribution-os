@@ -56,3 +56,7 @@ Thumbs.db
 /tools/bodaa_import_staging.json
 /tools/bodaa_import_report.csv
 /tools/bodaa_negative_quantity_review.csv
+
+# Migration runner — operational ephemera, never in Git
+/backups/
+/tools/migration-runner/

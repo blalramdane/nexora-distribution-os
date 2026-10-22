@@ -110,4 +110,7 @@ RUN mkdir -p \
 # Do not bake secrets into an image or generate a shared key while building it.
 USER www-data
 EXPOSE 8000
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+# Run idempotent production migrations at container boot; `artisan serve` then
+# takes over. Failed migrations keep the old image running (blitz keeps the
+# previous container until a new one is proven).
+CMD ["sh", "-c", "php artisan migrate --force && exec php artisan serve --host=0.0.0.0 --port=8000"]
