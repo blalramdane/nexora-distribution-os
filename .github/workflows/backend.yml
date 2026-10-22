@@ -47,6 +47,58 @@ jobs:
       - name: Prepare environment
         run: cp .env.example .env && php artisan key:generate
 
+      - name: Database lifecycle gate — fresh migration
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: nexora_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: php artisan migrate:fresh --force
+
+      - name: Database lifecycle gate — repeatable seed
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: nexora_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: |
+          php artisan db:seed --force
+          php artisan db:seed --force
+
+      - name: Database lifecycle gate — full rollback
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: nexora_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: php artisan migrate:reset --force
+
+      - name: Database lifecycle gate — migrate after rollback
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: nexora_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: php artisan migrate --force
+
+      - name: Database lifecycle gate — final seed
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: nexora_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: php artisan db:seed --force
+
       - name: Run migrations
         env:
           DB_CONNECTION: mysql

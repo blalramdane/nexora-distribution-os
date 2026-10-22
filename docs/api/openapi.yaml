@@ -1,0 +1,2255 @@
+openapi: 3.1.0
+info:
+  title: NEXORA Distribution OS API
+  version: 1.0.0
+  summary: API contract for the NEXORA distribution, inventory and field-sales application.
+  description: |
+    This document describes the HTTP API currently registered by the Laravel application.
+    The base path is `/api/v1`. Protected routes use Sanctum bearer tokens and derive the
+    organization/tenant from the authenticated user; clients must not send another tenant
+    identifier to select a different organization. Business writes are reviewable operations
+    and financial posting remains subject to server validation and tenant permissions.
+    Rate limits are 60 requests per minute for guest IPs and 180 requests per minute per authenticated
+    user; the login endpoint keeps its stricter five attempts per minute limit.
+    For endpoints whose accepted fields are still being formalized, `OpenRequest` is an
+    intentionally open object and is not a promise that arbitrary fields will be accepted.
+servers:
+  - url: /api/v1
+    description: Same-origin/local deployment. Override the server URL for a separately hosted API.
+tags:
+  - name: Health
+  - name: Authentication
+  - name: Dashboard
+  - name: Reports
+  - name: Catalog
+  - name: Customers
+  - name: Suppliers
+  - name: Inventory
+  - name: Purchases
+  - name: Purchase Imports
+  - name: Sales
+  - name: Administration
+  - name: Invoice Sharing
+  - name: Payments
+  - name: Expenses
+  - name: Returns
+  - name: Trips
+  - name: Field
+  - name: Synchronization
+  - name: Finance References
+security:
+  - bearerAuth: []
+paths:
+  /admin/access:
+    get:
+      tags: [Administration]
+      operationId: getOrganizationAccess
+      summary: Read users, organization roles and permissions
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/roles:
+    post:
+      tags: [Administration]
+      operationId: createOrganizationRole
+      summary: Create an organization role with an explicit permission set
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /admin/users:
+    post:
+      tags: [Administration]
+      operationId: createOrganizationUser
+      summary: Create an active user and assign an existing organization role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Check API availability
+      security: []
+      responses:
+        '200':
+          description: API process is responding.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, service]
+                properties:
+                  status: { type: string, const: ok }
+                  service: { type: string, const: nexora-distribution-api }
+  /auth/login:
+    post:
+      tags: [Authentication]
+      operationId: login
+      summary: Create a Sanctum token for an active organization user
+      description: Limited to five attempts per minute. Login may be an email address or phone number.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+            example:
+              organization_id: 01JABCDEF01234567890123456
+              login: admin@example.test
+              password: example-only
+              device_name: NEXORA Web
+      responses:
+        '200':
+          description: Authenticated session.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      operationId: logout
+      summary: Revoke the current access token
+      responses:
+        '200':
+          description: Current token revoked.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: ok }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/me:
+    get:
+      tags: [Authentication]
+      operationId: getCurrentUser
+      summary: Read current user, roles and permissions
+      responses:
+        '200':
+          description: Current authenticated user.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /dashboard:
+    get:
+      tags: [Dashboard]
+      operationId: getDashboard
+      summary: Read dashboard metrics for the current organization
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /reports:
+    get:
+      tags: [Reports]
+      operationId: getOperationalReport
+      summary: Read tenant-scoped operational and profit report for a date range
+      description: |
+        The maximum range is 367 calendar dates. Period totals use posted documents and date fields
+        for each document type. Receivables, payables, and inventory are current snapshots, not
+        historical period balances. Net profit is operational and excludes cash/stock variances;
+        it is not a final tax statement. Net cost of goods sold can be negative where cost recovered
+        from returns on prior-period invoices exceeds the cost of sales in the requested period.
+        The current tax, foreign-currency and variance accounting
+        policy decision gates still apply.
+      parameters:
+        - name: date_from
+          in: query
+          required: false
+          description: First report date, inclusive. Defaults to the first day of the selected end-date month.
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          required: false
+          description: Last report date, inclusive. Defaults to today in the organization's configured timezone.
+          schema: { type: string, format: date }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /invoice-register:
+    get:
+      tags: [Reports]
+      operationId: listUnifiedInvoiceRegister
+      summary: List posted sales and purchase invoices in one tenant-scoped register
+      description: |
+        The register is read-only and shows invoice totals, paid amounts, posted returns and
+        remaining balances. Summary amounts are grouped by currency and never added across currencies.
+      parameters:
+        - name: type
+          in: query
+          schema: { type: string, enum: [all, sales, purchases], default: all }
+        - $ref: '#/components/parameters/SearchQuery'
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 10, maximum: 100, default: 25 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /products:
+    get:
+      tags: [Catalog]
+      operationId: listProducts
+      summary: Search and list catalog products
+      parameters:
+        - $ref: '#/components/parameters/SearchQuery'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Catalog]
+      operationId: createProduct
+      summary: Create a catalog product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProductRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /products/{productId}:
+    parameters:
+      - name: productId
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/Ulid' }
+    get:
+      tags: [Catalog]
+      operationId: getProductDetails
+      summary: Get editable details and the current purchase carton definition for a product
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Catalog]
+      operationId: updateProduct
+      summary: Update catalog details, price defaults and future carton conversion
+      description: If a carton conversion changes, an existing packaging definition is versioned rather than overwritten so historic invoice snapshots stay valid. The inventory base unit cannot change for products with history.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProductRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Catalog]
+      operationId: deleteOrArchiveProduct
+      summary: Permanently delete an unused catalog item or deactivate an item with history
+      description: Products referenced by stock, invoices, movements, transfers or trip records are deactivated instead of permanently deleted. The response action is deleted or deactivated.
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /products/{productId}/restore:
+    post:
+      tags: [Catalog]
+      operationId: restoreProduct
+      summary: Restore an archived catalog product without changing its stock or transaction history
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /catalog/pos:
+    get:
+      tags: [Catalog]
+      operationId: getPosCatalog
+      summary: Load catalog data optimized for the cashier screen
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /catalog/references:
+    get:
+      tags: [Catalog]
+      operationId: getCatalogReferences
+      summary: Load shared and organization catalog references such as units and categories
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /categories:
+    post:
+      tags: [Catalog]
+      operationId: createCatalogCategory
+      summary: Create an Arabic catalog category, optionally nested under a parent category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCategoryRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /products/{productId}/suppliers:
+    post:
+      tags: [Catalog, Suppliers]
+      operationId: linkSupplierToExistingProduct
+      summary: Add or update a supplier-specific code and purchase packaging for an existing catalog product
+      description: Links the supplier to the existing product without creating a duplicate product record. Supplier cost is kept on the supplier-product relation.
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SupplierProductLinkRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /customers:
+    get:
+      tags: [Customers]
+      operationId: listCustomers
+      summary: Search and list customers belonging to the current organization
+      parameters:
+        - $ref: '#/components/parameters/SearchQuery'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Customers]
+      operationId: createCustomer
+      summary: Create a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /customers/{customerId}/prices:
+    get:
+      tags: [Customers]
+      operationId: getCustomerProductPrices
+      summary: List saved customer-specific prices by product and unit
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Customers]
+      operationId: saveCustomerProductPrice
+      summary: Upsert a saved selling price for one customer, product and unit
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomerProductPriceRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /customers/{customerId}:
+    patch:
+      tags: [Customers]
+      operationId: updateCustomer
+      summary: Update customer master data within the current organization
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /customers/{customerId}/360:
+    get:
+      tags: [Customers]
+      operationId: getCustomer360
+      summary: Read customer profile, invoice history, balances and payments
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+        - $ref: '#/components/parameters/PerPage'
+        - name: invoices_page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: payments_page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: returns_page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /suppliers:
+    get:
+      tags: [Suppliers]
+      operationId: listSuppliers
+      summary: Search and list suppliers belonging to the current organization
+      parameters:
+        - $ref: '#/components/parameters/SearchQuery'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Suppliers]
+      operationId: createSupplier
+      summary: Register a supplier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SupplierCreateRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /suppliers/{supplierId}/360:
+    get:
+      tags: [Suppliers]
+      operationId: getSupplier360
+      summary: Read supplier history, invoices, returns, payments and open balance
+      parameters:
+        - $ref: '#/components/parameters/SupplierId'
+        - $ref: '#/components/parameters/PerPage'
+        - name: invoices_page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: payments_page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: returns_page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /suppliers/{supplierId}/rebates:
+    get:
+      tags: [Suppliers]
+      operationId: listSupplierRebates
+      summary: List tracked supplier rebates earned by the current organization
+      description: Rebate credits are reported separately from cash and supplier payable balances until their approved accounting treatment is posted.
+      parameters:
+        - $ref: '#/components/parameters/SupplierId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Suppliers]
+      operationId: accrueSupplierRebate
+      summary: Calculate and record a rebate against previously unclaimed posted purchase invoices
+      description: |
+        The invoice total (after header discount and recorded tax) is snapshotted for each invoice.
+        One purchase invoice may be included in at most one rebate. All invoices in one claim must
+        share a currency. This records a rebate credit for review; it does not record cash or silently
+        offset supplier payables or post a general-ledger journal.
+      parameters:
+        - $ref: '#/components/parameters/SupplierId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SupplierRebateRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /inventory:
+    get:
+      tags: [Inventory]
+      operationId: getInventory
+      summary: Read stock balances and valuation by product and location
+      parameters:
+        - $ref: '#/components/parameters/SearchQuery'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /inventory/adjust:
+    post:
+      tags: [Inventory]
+      operationId: adjustInventory
+      summary: Record a reviewed inventory adjustment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /locations:
+    get:
+      tags: [Inventory]
+      operationId: listLocations
+      summary: List organization stock locations and warehouses
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Inventory]
+      operationId: createWarehouseLocation
+      summary: Create an active warehouse and its linked stock location atomically
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateWarehouseRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /purchases:
+    post:
+      tags: [Purchases]
+      operationId: postPurchase
+      summary: Post a purchase invoice and receive stock atomically
+      description: |
+        New catalog items can be supplied inline per item using `new_product` instead of
+        `product_id`. The server validates tenant ownership and idempotency. The final invoice
+        must reconcile with item values. Tax, certain discounts and multi-currency operations
+        remain fail-closed pending explicit accounting policy approval.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PurchaseRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/PostedDocument' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /purchases/history:
+    get:
+      tags: [Purchases]
+      operationId: listPurchaseHistory
+      summary: Search purchase invoice history
+      parameters:
+        - $ref: '#/components/parameters/SearchQuery'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /purchases/open-balances:
+    get:
+      tags: [Purchases]
+      operationId: listPurchaseOpenBalances
+      summary: Read outstanding supplier invoice balances
+      parameters:
+        - $ref: '#/components/parameters/SearchQuery'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /purchases/source-trace:
+    get:
+      tags: [Purchases]
+      operationId: getPurchaseSourceTrace
+      summary: Trace purchase sources through items, locations and downstream sales
+      parameters:
+        - $ref: '#/components/parameters/SearchQuery'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /purchases/invoices/{invoiceId}:
+    get:
+      tags: [Purchases]
+      operationId: getPurchaseInvoice
+      summary: Read a posted purchase invoice
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /purchases/invoices/{invoiceId}/items:
+    get:
+      tags: [Purchases]
+      operationId: getPurchaseInvoiceItems
+      summary: Read purchase invoice item snapshots and remaining returnable quantities
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /purchase-imports:
+    get:
+      tags: [Purchase Imports]
+      operationId: listPurchaseImports
+      summary: List the current organization's saved invoice source files
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Purchase Imports]
+      operationId: uploadPurchaseImports
+      summary: Upload up to ten purchase invoice images or PDFs
+      description: Files are privately stored and deduplicated by SHA-256 within the organization. Upload does not post stock.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [documents]
+              properties:
+                documents:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /purchase-imports/{documentId}/extraction:
+    put:
+      tags: [Purchase Imports]
+      operationId: savePurchaseImportExtraction
+      summary: Save OCR text and a human-review extraction draft
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PurchaseExtractionRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /purchase-imports/{documentId}/file:
+    get:
+      tags: [Purchase Imports]
+      operationId: downloadPurchaseImportOriginal
+      summary: Download the privately stored original purchase document
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '200':
+          description: Original PDF or image. Response is private and not cacheable.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: 'private, no-store' }
+          content:
+            application/pdf: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /sales:
+    post:
+      tags: [Sales]
+      operationId: postSale
+      summary: Post a customer sale and reduce stock atomically
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaleRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/PostedDocument' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /sales/history:
+    get:
+      tags: [Sales]
+      operationId: listCustomerSales
+      summary: List posted sales invoices for a customer
+      parameters:
+        - name: customer_id
+          in: query
+          required: true
+          schema: { type: string, minLength: 26, maxLength: 26 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /sales/open-balances:
+    get:
+      tags: [Sales]
+      operationId: listOpenCustomerReceivables
+      summary: List posted sales invoices with an outstanding customer balance
+      description: |
+        Rows are scoped to the authenticated organization and may be searched by customer name, code,
+        phone or invoice number. The total_receivable, open_invoice_count and customer_count values
+        summarize the whole organization and are not filtered by the current search or page. Outstanding
+        invoice balance includes posted returns linked to the original invoice. These are invoice-level
+        operational balances, not historical aging or a final statement of account.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema: { type: string, maxLength: 120 }
+        - name: customer_id
+          in: query
+          required: false
+          schema: { type: string, minLength: 26, maxLength: 26 }
+        - $ref: '#/components/parameters/PerPage'
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /sales/invoices:
+    get:
+      tags: [Sales]
+      operationId: listCustomerOpenInvoices
+      summary: List unpaid invoices for a customer
+      parameters:
+        - name: customer_id
+          in: query
+          required: true
+          schema: { type: string, minLength: 26, maxLength: 26 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /sales/invoices/{invoiceId}:
+    get:
+      tags: [Sales]
+      operationId: getSalesInvoice
+      summary: Read a posted sales invoice and customer details
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /sales/invoices/{invoiceId}/items:
+    get:
+      tags: [Sales]
+      operationId: getSalesInvoiceItems
+      summary: Read sale item snapshots and quantities still eligible for return
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /invoice-shares:
+    get:
+      tags: [Invoice Sharing]
+      operationId: listInvoiceShareLinks
+      summary: List share links for a posted invoice within the current organization
+      parameters:
+        - name: invoice_type
+          in: query
+          required: true
+          schema: { type: string, enum: [sales, purchase] }
+        - name: invoice_id
+          in: query
+          required: true
+          schema: { type: string, minLength: 26, maxLength: 26 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      tags: [Invoice Sharing]
+      operationId: createInvoiceShareLink
+      summary: Create a view-only expiring share link for a posted sales or purchase invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoice_type, invoice_id, expires_in_days]
+              properties:
+                invoice_type: { type: string, enum: [sales, purchase] }
+                invoice_id: { type: string, minLength: 26, maxLength: 26 }
+                expires_in_days: { type: integer, minimum: 1, maximum: 90 }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /invoice-shares/{shareId}:
+    delete:
+      tags: [Invoice Sharing]
+      operationId: revokeInvoiceShareLink
+      summary: Revoke a share link owned by the current organization
+      parameters:
+        - name: shareId
+          in: path
+          required: true
+          schema: { type: string, minLength: 26, maxLength: 26 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /shared/invoice/{token}:
+    get:
+      tags: [Invoice Sharing]
+      operationId: getSharedInvoice
+      summary: Read a view-only invoice shared by a valid, unexpired token
+      description: Returns limited invoice details; access is logged. The token cannot modify invoice or account data.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[A-Za-z0-9]{64}$', minLength: 64, maxLength: 64 }
+      responses:
+        '200':
+          description: Limited invoice details. Response uses private/no-store caching and no-referrer protections.
+          headers:
+            Cache-Control:
+              schema: { type: string, example: 'private, no-store' }
+            Referrer-Policy:
+              schema: { type: string, example: no-referrer }
+            X-Robots-Tag:
+              schema: { type: string, example: 'noindex, nofollow' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SharedInvoiceResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /payments:
+    post:
+      tags: [Payments]
+      operationId: postPayment
+      summary: Record a customer receipt or supplier payment
+      description: Payment allocations must refer to valid documents in the current organization. Currency mismatches are rejected pending an approved FX model.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PaymentRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/PostedDocument' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /sales/payment-references:
+    get:
+      tags: [Sales]
+      operationId: getSalePaymentReferences
+      summary: Load permitted financial accounts and payment methods for point-of-sale receipts
+      description: Available to users with sales.post permission; references are restricted to the authenticated organization plus approved shared payment methods.
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /settings:
+    get:
+      tags: [Administration]
+      operationId: getOrganizationSettings
+      summary: Read settings for the authenticated organization
+      description: The organization is derived from the authenticated tenant; callers cannot read another organization's settings.
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      tags: [Administration]
+      operationId: updateOrganizationSettings
+      summary: Update allowed organization profile fields and business defaults
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /expenses:
+    get:
+      tags: [Expenses]
+      operationId: listExpenses
+      summary: List organization expenses
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Expenses]
+      operationId: postExpense
+      summary: Record a trip or organization expense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/PostedDocument' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /returns/sales:
+    post:
+      tags: [Returns]
+      operationId: postSalesReturn
+      summary: Return sold goods to stock against an eligible sales invoice
+      description: Returns exceeding the source invoice's remaining receivable fail closed while credit/refund policy is pending.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/PostedDocument' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /returns/purchases:
+    post:
+      tags: [Returns]
+      operationId: postPurchaseReturn
+      summary: Return purchased goods to a supplier against an eligible purchase invoice
+      description: Returns exceeding the source invoice's remaining payable fail closed while supplier-credit/refund policy is pending.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/PostedDocument' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /trips:
+    get:
+      tags: [Trips]
+      operationId: listTrips
+      summary: List operational trips for the organization
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Trips]
+      operationId: createTrip
+      summary: Plan a trip using a vehicle, sales representative and origin location
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTripRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /field/reps:
+    get:
+      tags: [Field]
+      operationId: listFieldRepresentatives
+      summary: List field representative accounts in the current organization for trip assignment
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Field]
+      operationId: createFieldRepresentative
+      summary: Create a least-privilege field representative account
+      description: The response does not include a login token or password. Use the normal authentication endpoint to create a session.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, password]
+              properties:
+                name: { type: string, maxLength: 255 }
+                email: { type: [string, 'null'], format: email, maxLength: 255 }
+                phone: { type: [string, 'null'], maxLength: 32 }
+                password: { type: string, minLength: 10, maxLength: 128 }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vehicles:
+    get:
+      tags: [Trips]
+      operationId: listVehicles
+      summary: List active distribution vehicles
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /trips/{trip}/stock:
+    get:
+      tags: [Trips]
+      operationId: getTripStock
+      summary: Read stock in the vehicle assigned to a trip
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /trips/{trip}/profit:
+    get:
+      tags: [Trips]
+      operationId: getTripProfit
+      summary: Read trip sales, returns, COGS, expenses and provisional profit
+      description: Cash and inventory variances are reported separately and excluded from net profit until an accounting policy is approved.
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /trips/{trip}/route:
+    get:
+      tags: [Trips]
+      operationId: getTripRoute
+      summary: Read assigned customers and their visit order
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /trips/{trip}/route/optimize:
+    post:
+      tags: [Trips]
+      operationId: optimizeTripRoute
+      summary: Order customers by nearest-neighbor distance when coordinates exist
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                start_customer_id: { $ref: '#/components/schemas/Ulid' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /trips/{trip}/route/reorder:
+    post:
+      tags: [Trips]
+      operationId: reorderTripRoute
+      summary: Save an explicit order containing every customer assigned to the trip
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customer_ids]
+              properties:
+                customer_ids:
+                  type: array
+                  minItems: 1
+                  items: { $ref: '#/components/schemas/Ulid' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /trips/{trip}/customers:
+    post:
+      tags: [Trips]
+      operationId: assignTripCustomer
+      summary: Assign an organization customer to a trip
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customer_id]
+              properties:
+                customer_id: { $ref: '#/components/schemas/Ulid' }
+                sequence: { type: integer, minimum: 1 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /trip-loads:
+    post:
+      tags: [Trips]
+      operationId: postTripLoad
+      summary: Record a stock load or movement associated with a trip
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/PostedDocument' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /trip-settlements:
+    post:
+      tags: [Trips]
+      operationId: settleTrip
+      summary: Reconcile trip stock and cash and close a trip according to current rules
+      description: Variance ledger treatment remains subject to owner policy decisions; recorded variance is not represented as automatically posted to an over/short account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/PostedDocument' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /finance/references:
+    get:
+      tags: [Finance References]
+      operationId: listFinanceReferences
+      summary: Load financial accounts, payment methods and currency references
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /finance/accounts:
+    post:
+      tags: [Finance References]
+      operationId: createFinancialAccount
+      summary: Create an organization-owned cash, wallet or bank account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateFinancialAccountRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /finance/payment-methods:
+    post:
+      tags: [Finance References]
+      operationId: createOrganizationPaymentMethod
+      summary: Add an organization-specific payment method
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePaymentMethodRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /field/today:
+    get:
+      tags: [Field]
+      operationId: getFieldToday
+      summary: Load today's field sales and customer visit context
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /field/references:
+    get:
+      tags: [Field]
+      operationId: getFieldTransactionReferences
+      summary: Read permitted financial accounts and payment methods for field transactions
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /field/customer-prices:
+    get:
+      tags: [Field]
+      operationId: getAssignedCustomerProductPrices
+      summary: List saved selling prices for a customer assigned to the authenticated representative's active trip
+      description: Returns prices only, restricted to the authenticated representative's own active trip and its assigned customer; internal product costs are not returned.
+      parameters:
+        - name: trip_id
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+        - name: customer_id
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /field/catalog:
+    get:
+      tags: [Field]
+      operationId: searchAssignedVehicleCatalog
+      summary: Search active products stocked in the authenticated representative's assigned vehicle
+      parameters:
+        - name: trip_id
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+        - name: q
+          in: query
+          required: false
+          schema: { type: string, maxLength: 120 }
+        - name: per_page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 12, maximum: 100 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /field/expenses:
+    get:
+      tags: [Field]
+      operationId: listAssignedTripExpenses
+      summary: List posted expenses for the authenticated representative's open trip
+      parameters:
+        - name: trip_id
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /field/stocktake:
+    get:
+      tags: [Field]
+      operationId: getAssignedTripStocktake
+      summary: Get expected vehicle quantities and previous physical-count submissions for the assigned trip
+      parameters:
+        - name: trip_id
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      tags: [Field]
+      operationId: submitAssignedTripStocktake
+      summary: Submit physical vehicle counts for review without automatically adjusting inventory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [trip_id, idempotency_key, items]
+              properties:
+                trip_id: { $ref: '#/components/schemas/Ulid' }
+                idempotency_key: { type: string, maxLength: 255 }
+                notes: { type: [string, 'null'], maxLength: 2000 }
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 1000
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [product_id, counted_quantity_base]
+                    properties:
+                      product_id: { $ref: '#/components/schemas/Ulid' }
+                      counted_quantity_base: { type: number, minimum: 0, maximum: 1000000000 }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /field/sales:
+    get:
+      tags: [Field]
+      operationId: listAssignedCustomerSalesForReturn
+      summary: List posted invoices for a customer assigned to the representative's open trip
+      parameters:
+        - name: trip_id
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+        - name: customer_id
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /field/sales/{invoiceId}/items:
+    get:
+      tags: [Field]
+      operationId: listReturnableAssignedSalesLines
+      summary: Read the original invoice line snapshots and remaining returnable quantities
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+        - name: trip_id
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+        - name: customer_id
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /field/visits:
+    post:
+      tags: [Field]
+      operationId: recordFieldVisit
+      summary: Record a field visit or queued offline visit operation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/PostedDocument' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /field/customers:
+    post:
+      tags: [Field]
+      operationId: createCustomerFromField
+      summary: Register a customer from the field workflow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /sync/device:
+    post:
+      tags: [Synchronization]
+      operationId: registerSyncDevice
+      summary: Register or refresh a synchronization device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /sync/operations:
+    post:
+      tags: [Synchronization]
+      operationId: applySyncOperations
+      summary: Submit queued field operations for validation and idempotent synchronization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /cashbox:
+    get:
+      tags: [Finance References]
+      operationId: getCashboxLedger
+      summary: Read cash movements, current account balances and cash summary
+      parameters:
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+        - name: financial_account_id
+          in: query
+          schema: { $ref: '#/components/schemas/Ulid' }
+        - name: direction
+          in: query
+          schema: { type: string, enum: [inbound, outbound, transfer] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 300 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      tags: [Finance References]
+      operationId: postCashboxTransaction
+      summary: Record opening cash, other income, withdrawals, salary, expenses or account transfer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/PostedDocument' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /cashbox/beneficiaries:
+    get:
+      tags: [Finance References]
+      operationId: listCashboxBeneficiaries
+      summary: List active organization users who can be selected as a cashbox beneficiary
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /customers/import-contacts:
+    post:
+      tags: [Customers]
+      operationId: importCustomerContacts
+      summary: Import customer contacts into the current organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '201': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /inventory/summary:
+    get:
+      tags: [Inventory]
+      operationId: getInventorySummary
+      summary: Read organization-wide stock totals independently of table pagination
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /inventory/movements:
+    get:
+      tags: [Inventory]
+      operationId: listInventoryMovements
+      summary: Search stock movements by source document, date, type, item and location
+      parameters:
+        - $ref: '#/components/parameters/SearchQuery'
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+        - name: location_id
+          in: query
+          schema: { $ref: '#/components/schemas/Ulid' }
+        - name: product_id
+          in: query
+          schema: { $ref: '#/components/schemas/Ulid' }
+        - name: movement_type
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /inventory/stocktakes:
+    get:
+      tags: [Inventory]
+      operationId: listFieldStocktakes
+      summary: List submitted and reviewed vehicle stock counts
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [submitted, approved, rejected, all] }
+        - $ref: '#/components/parameters/SearchQuery'
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /inventory/stocktakes/{stocktakeId}/review:
+    post:
+      tags: [Inventory]
+      operationId: reviewFieldStocktake
+      summary: Approve or reject a stocktake, posting verified variance only on approval
+      parameters:
+        - name: stocktakeId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /inventory/transfers:
+    post:
+      tags: [Inventory]
+      operationId: createInventoryTransfer
+      summary: Transfer stock between organization-owned locations atomically
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/PostedDocument' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /suppliers/{supplierId}:
+    delete:
+      tags: [Suppliers]
+      operationId: archiveSupplier
+      summary: Archive a supplier while retaining invoice, payment and history records
+      parameters:
+        - $ref: '#/components/parameters/SupplierId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /suppliers/{supplierId}/restore:
+    post:
+      tags: [Suppliers]
+      operationId: restoreSupplier
+      summary: Restore an archived supplier
+      parameters:
+        - $ref: '#/components/parameters/SupplierId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /suppliers/{supplierId}/products:
+    get:
+      tags: [Suppliers]
+      operationId: listSupplierProducts
+      summary: List supplier-linked products and their settlement policies
+      parameters:
+        - $ref: '#/components/parameters/SupplierId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /suppliers/{supplierId}/products/{productId}/settlement:
+    put:
+      tags: [Suppliers]
+      operationId: updateSupplierProductSettlement
+      summary: Update supplier-specific settlement method and negotiated unit price
+      parameters:
+        - $ref: '#/components/parameters/SupplierId'
+        - name: productId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /suppliers/{supplierId}/trip-settlements:
+    get:
+      tags: [Suppliers]
+      operationId: listSupplierTripSettlements
+      summary: Read supplier settlement history, payments and outstanding balance
+      parameters:
+        - $ref: '#/components/parameters/SupplierId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /trips/archive-all:
+    delete:
+      tags: [Trips]
+      operationId: archiveAllTrips
+      summary: Archive active trips after explicit confirmation while keeping transaction history
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /trips/cleanup-empty:
+    delete:
+      tags: [Trips]
+      operationId: deleteEmptyPlannedTrips
+      summary: Permanently delete only empty planned trips after explicit confirmation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /trips/{trip}:
+    patch:
+      tags: [Trips]
+      operationId: updateTrip
+      summary: Update a trip's optional display name
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Trips]
+      operationId: archiveTrip
+      summary: Archive a trip without deleting associated inventory or financial documents
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /trips/{trip}/restore:
+    post:
+      tags: [Trips]
+      operationId: restoreTrip
+      summary: Restore an archived trip to active operations
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /trips/{trip}/report:
+    get:
+      tags: [Trips]
+      operationId: getDetailedTripReport
+      summary: Read trip load, sales, cash, receivables, expenses and stock variance
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /trips/{trip}/supplier-settlement:
+    get:
+      tags: [Trips]
+      operationId: previewTripSupplierSettlement
+      summary: Preview sold and returned stock and settlement amount by source supplier
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200': { $ref: '#/components/responses/JsonResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum token
+      description: Token returned by POST /auth/login. Use the current user's token; tenant scope is resolved server-side.
+  parameters:
+    SearchQuery:
+      name: q
+      in: query
+      required: false
+      description: Optional server-side search query. Exact fields depend on the resource endpoint.
+      schema: { type: string, maxLength: 255 }
+    PerPage:
+      name: per_page
+      in: query
+      required: false
+      description: Pagination page size for customer/supplier history responses.
+      schema: { type: integer, minimum: 10, maximum: 50, default: 25 }
+    CustomerId:
+      name: customerId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Ulid' }
+    SupplierId:
+      name: supplierId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Ulid' }
+    InvoiceId:
+      name: invoiceId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Ulid' }
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Ulid' }
+    TripId:
+      name: trip
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Ulid' }
+  schemas:
+    Ulid:
+      type: string
+      minLength: 26
+      maxLength: 26
+      pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'
+      description: ULID identifier.
+    OpenRequest:
+      type: object
+      additionalProperties: true
+      description: |
+        JSON object for a currently implemented endpoint whose exact field-level schema is
+        not yet fully captured in this contract. Only fields accepted by the live controller
+        are valid; unknown fields are not guaranteed to be ignored.
+    CustomerProductPriceRequest:
+      type: object
+      additionalProperties: false
+      required: [product_id, unit_price]
+      properties:
+        product_id: { $ref: '#/components/schemas/Ulid' }
+        packaging_id: { type: [string, 'null'], minLength: 26, maxLength: 26, description: Null means the product's base unit. }
+        unit_price: { type: number, minimum: 0, maximum: 1000000000 }
+    SharedInvoiceResponse:
+      type: object
+      required: [invoice]
+      properties:
+        invoice:
+          type: object
+          required: [document_number, invoice_date, party_name, subtotal, discount, tax, total, currency, items]
+          properties:
+            document_number: { type: string }
+            invoice_date: { type: string, format: date }
+            party_name: { type: string }
+            subtotal: { type: [string, number] }
+            discount: { type: [string, number] }
+            tax: { type: [string, number] }
+            total: { type: [string, number] }
+            currency: { type: string, minLength: 3, maxLength: 3 }
+            items:
+              type: array
+              items:
+                type: object
+                required: [product_name_snapshot, sku_snapshot, quantity, unit_price, line_total]
+                properties:
+                  product_name_snapshot: { type: string }
+                  sku_snapshot: { type: string }
+                  quantity: { type: [string, number] }
+                  unit_price: { type: [string, number] }
+                  line_total: { type: [string, number] }
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [organization_id, login, password, device_name]
+      properties:
+        organization_id: { $ref: '#/components/schemas/Ulid' }
+        login: { type: string, maxLength: 255, description: User email or phone. }
+        password: { type: string, format: password }
+        device_name: { type: string, maxLength: 128 }
+    User:
+      type: object
+      required: [id, organization_id, name, status, roles, permissions]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        organization_id: { $ref: '#/components/schemas/Ulid' }
+        name: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        status: { type: string }
+        roles:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              name: { type: string }
+        permissions:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              name: { type: string }
+    LoginResponse:
+      type: object
+      required: [token, token_type, user]
+      properties:
+        token: { type: string, description: Store securely; do not log or expose the token. }
+        token_type: { type: string, const: Bearer }
+        user: { $ref: '#/components/schemas/User' }
+    SupplierCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        code: { type: [string, 'null'], maxLength: 64, description: Optional organization-scoped supplier code; generated when omitted. }
+        phone: { type: [string, 'null'], maxLength: 32 }
+        tax_number: { type: [string, 'null'], maxLength: 128 }
+        address_text: { type: [string, 'null'], maxLength: 2000 }
+        notes: { type: [string, 'null'], maxLength: 5000 }
+    SupplierRebateRequest:
+      type: object
+      additionalProperties: false
+      required: [period_from, period_to, rate_percent]
+      properties:
+        period_from: { type: string, format: date }
+        period_to: { type: string, format: date, description: Must be on or after period_from. }
+        rate_percent: { type: number, exclusiveMinimum: 0, maximum: 100, description: Percent of each included posted invoice total. }
+        notes: { type: [string, 'null'], maxLength: 2000 }
+    PurchaseExtractionRequest:
+      type: object
+      additionalProperties: false
+      required: [extracted_text, ocr_engine]
+      properties:
+        extracted_text: { type: string, maxLength: 150000 }
+        extraction_json: { type: [object, 'null'], additionalProperties: true }
+        ocr_engine: { type: string, maxLength: 64 }
+        ocr_confidence: { type: [number, 'null'], minimum: 0, maximum: 100 }
+    IdempotencyKey:
+      type: string
+      minLength: 1
+      maxLength: 255
+      description: Stable key for safe retries of the same operation.
+    PurchaseRequest:
+      type: object
+      additionalProperties: false
+      required: [supplier_id, location_id, idempotency_key, items]
+      properties:
+        supplier_id: { $ref: '#/components/schemas/Ulid' }
+        location_id: { $ref: '#/components/schemas/Ulid' }
+        supplier_invoice_number: { type: [string, 'null'], maxLength: 255 }
+        invoice_date: { type: [string, 'null'], format: date }
+        currency: { type: [string, 'null'], minLength: 3, maxLength: 3 }
+        discount: { type: [number, 'null'], minimum: 0, description: Non-zero purchase header discounts remain fail-closed pending approved costing policy. }
+        tax: { type: [number, 'null'], minimum: 0, description: Non-zero tax remains fail-closed pending approved accounting policy. }
+        idempotency_key: { $ref: '#/components/schemas/IdempotencyKey' }
+        items:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/PurchaseItem' }
+    PurchaseItem:
+      type: object
+      required: [quantity, unit_cost]
+      properties:
+        product_id: { $ref: '#/components/schemas/Ulid' }
+        new_product: { $ref: '#/components/schemas/NewProductDraft' }
+        quantity: { type: number, exclusiveMinimum: 0 }
+        unit_cost: { type: number, minimum: 0 }
+        unit_id: { $ref: '#/components/schemas/Ulid' }
+        packaging_id: { $ref: '#/components/schemas/Ulid' }
+      oneOf:
+        - required: [product_id]
+        - required: [new_product]
+      description: Provide exactly one of product_id or new_product; the server rejects both or neither.
+    NewProductDraft:
+      type: object
+      required: [name_ar, base_unit_id]
+      properties:
+        name_ar: { type: string, minLength: 1, maxLength: 255 }
+        sku: { type: string, maxLength: 128, description: Optional internal SKU; server generates a value when omitted. }
+        base_unit_id: { $ref: '#/components/schemas/Ulid' }
+        supplier_sku: { type: string, maxLength: 128 }
+        supplier_name: { type: string, maxLength: 255 }
+        name_en: { type: string, maxLength: 255 }
+        brand: { type: string, maxLength: 255 }
+        category_id: { $ref: '#/components/schemas/Ulid' }
+        default_piece_price: { type: number, minimum: 0 }
+        purchase_packaging_name: { type: [string, 'null'], maxLength: 255, description: Supplier purchase-package label when a newly added product is received in cartons or packs. }
+        purchase_packaging_unit_id:
+          description: Unit used for the purchase package, such as carton.
+          anyOf:
+            - { $ref: '#/components/schemas/Ulid' }
+            - { type: 'null' }
+        purchase_conversion_to_base: { type: [number, string, 'null'], exclusiveMinimum: 0, description: Base-unit quantity contained in one purchase package; required with package label/unit when greater than one. }
+    CreateProductRequest:
+      type: object
+      additionalProperties: false
+      required: [sku, name_ar, base_unit_id]
+      properties:
+        sku: { type: string, minLength: 1, maxLength: 128, description: Operator-provided catalog SKU; unique within the organization. }
+        name_ar: { type: string, minLength: 1, maxLength: 255 }
+        brand: { type: [string, 'null'], maxLength: 255 }
+        category_id: { type: [string, 'null'], minLength: 26, maxLength: 26 }
+        base_unit_id: { $ref: '#/components/schemas/Ulid', description: Base inventory unit, normally one piece. }
+        carton_unit_id: { type: [string, 'null'], minLength: 26, maxLength: 26 }
+        pieces_per_carton: { type: integer, minimum: 1, description: Number of base pieces contained in one carton. }
+        carton_purchase_price: { type: [number, 'null'], minimum: 0, description: Supplier cost per carton; the server derives default piece cost from the conversion factor. }
+        default_cost: { type: number, minimum: 0, description: Legacy/base-unit cost used when carton_purchase_price is not supplied. }
+        default_piece_price: { type: number, minimum: 0 }
+        color: { type: [string, 'null'], maxLength: 100, description: Optional product attribute supported when the preview database schema has the color column. }
+        supplier_id: { type: [string, 'null'], minLength: 26, maxLength: 26, description: Optional preferred supplier. }
+        supplier_sku: { type: [string, 'null'], maxLength: 128, description: Supplier-specific code, separate from the catalog SKU. }
+        supplier_name: { type: [string, 'null'], maxLength: 255 }
+        initial_cartons: { type: integer, minimum: 0, default: 0 }
+        initial_pieces: { type: integer, minimum: 0, default: 0, description: Loose pieces outside cartons. }
+        initial_location_id: { type: [string, 'null'], minLength: 26, maxLength: 26, description: Required when initial stock is greater than zero; must be an active warehouse. }
+    UpdateProductRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        sku: { type: string, minLength: 1, maxLength: 128 }
+        name_ar: { type: string, minLength: 1, maxLength: 255 }
+        brand: { type: [string, 'null'], maxLength: 255 }
+        category_id: { type: [string, 'null'], minLength: 26, maxLength: 26 }
+        base_unit_id: { $ref: '#/components/schemas/Ulid', description: Cannot be changed after operational history exists. }
+        default_cost: { type: number, minimum: 0 }
+        default_piece_price: { type: number, minimum: 0 }
+        carton_unit_id: { $ref: '#/components/schemas/Ulid', description: Must be provided together with pieces_per_carton when editing a carton. }
+        pieces_per_carton: { type: integer, minimum: 1, description: Must be provided together with carton_unit_id. }
+        carton_purchase_price: { type: [number, 'null'], minimum: 0 }
+    CreateCategoryRequest:
+      type: object
+      additionalProperties: false
+      required: [name_ar]
+      properties:
+        name_ar: { type: string, minLength: 1, maxLength: 180 }
+        code: { type: [string, 'null'], maxLength: 64, description: Generated when omitted. }
+        parent_id: { type: [string, 'null'], minLength: 26, maxLength: 26 }
+    CreateWarehouseRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 180 }
+        code: { type: [string, 'null'], maxLength: 64, description: Generated when omitted. }
+        address: { type: [string, 'null'], maxLength: 2000 }
+        type: { type: string, enum: [warehouse], default: warehouse }
+    SupplierProductLinkRequest:
+      type: object
+      additionalProperties: false
+      required: [supplier_id]
+      properties:
+        supplier_id: { $ref: '#/components/schemas/Ulid' }
+        supplier_sku: { type: [string, 'null'], maxLength: 128 }
+        supplier_name: { type: [string, 'null'], maxLength: 255 }
+        packaging_id: { type: [string, 'null'], minLength: 26, maxLength: 26, description: Existing purchase packaging for this product. }
+        carton_unit_id: { type: [string, 'null'], minLength: 26, maxLength: 26, description: Unit for an optional supplier-specific carton size. }
+        pieces_per_carton: { type: integer, minimum: 1, description: Optional base-piece conversion if this supplier uses a different carton. }
+        carton_purchase_price: { type: [number, 'null'], minimum: 0, description: Stored as this supplier's last cost per base piece without overwriting the catalog's other supplier costs. }
+    CreateFinancialAccountRequest:
+      type: object
+      additionalProperties: false
+      required: [name, type]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 180 }
+        type: { type: string, enum: [cash, wallet, bank, other] }
+        currency: { type: [string, 'null'], minLength: 3, maxLength: 3, description: Defaults to the organization's base currency. }
+        opening_balance: { type: number, minimum: 0, default: 0 }
+    CreatePaymentMethodRequest:
+      type: object
+      additionalProperties: false
+      required: [name_ar, code]
+      properties:
+        name_ar: { type: string, minLength: 1, maxLength: 120 }
+        code: { type: string, pattern: '^[a-zA-Z0-9_-]+$', maxLength: 32 }
+        requires_reference: { type: boolean, default: true }
+    SaleRequest:
+      type: object
+      additionalProperties: false
+      required: [customer_id, location_id, idempotency_key, items]
+      properties:
+        customer_id: { $ref: '#/components/schemas/Ulid' }
+        location_id: { $ref: '#/components/schemas/Ulid' }
+        trip_id: { $ref: '#/components/schemas/Ulid' }
+        invoice_date: { type: [string, 'null'], format: date }
+        discount: { type: number, minimum: 0 }
+        tax: { type: number, minimum: 0, description: Non-zero tax is rejected pending approved tax-account policy. }
+        paid_amount: { type: number, minimum: 0 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        notes: { type: string }
+        idempotency_key: { $ref: '#/components/schemas/IdempotencyKey' }
+        items:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/SaleItem' }
+    SaleItem:
+      type: object
+      required: [product_id, quantity, unit_price]
+      properties:
+        product_id: { $ref: '#/components/schemas/Ulid' }
+        quantity: { type: number, exclusiveMinimum: 0 }
+        conversion_factor: { type: number, exclusiveMinimum: 0 }
+        unit_price: { type: number, minimum: 0 }
+        packaging_id: { $ref: '#/components/schemas/Ulid' }
+        unit_id: { $ref: '#/components/schemas/Ulid' }
+    PaymentRequest:
+      type: object
+      additionalProperties: false
+      required: [party_type, party_id, financial_account_id, payment_method_id, direction, amount, idempotency_key]
+      properties:
+        party_type: { type: string, enum: [customer, supplier] }
+        party_id: { $ref: '#/components/schemas/Ulid' }
+        financial_account_id: { $ref: '#/components/schemas/Ulid' }
+        payment_method_id: { $ref: '#/components/schemas/Ulid' }
+        direction: { type: string, enum: [inbound, outbound] }
+        amount: { type: number, exclusiveMinimum: 0 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        payment_date: { type: string, format: date }
+        reference: { type: string, maxLength: 255 }
+        trip_id: { $ref: '#/components/schemas/Ulid' }
+        idempotency_key: { $ref: '#/components/schemas/IdempotencyKey' }
+        allocations:
+          type: array
+          items:
+            type: object
+            required: [document_type, document_id, amount]
+            properties:
+              document_type: { type: string, enum: [sales_invoice, purchase_invoice] }
+              document_id: { $ref: '#/components/schemas/Ulid' }
+              amount: { type: number, exclusiveMinimum: 0 }
+    CreateTripRequest:
+      type: object
+      additionalProperties: false
+      required: [vehicle_id, rep_user_id, origin_location_id]
+      properties:
+        vehicle_id: { $ref: '#/components/schemas/Ulid' }
+        rep_user_id: { $ref: '#/components/schemas/Ulid' }
+        origin_location_id: { $ref: '#/components/schemas/Ulid' }
+        trip_date: { type: string, format: date }
+        notes: { type: string }
+    PostedDocument:
+      type: object
+      description: Transaction response; exact fields depend on operation and include the posted document identity/number.
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        document_number: { type: string }
+        status: { type: string }
+      additionalProperties: true
+    Error:
+      type: object
+      properties:
+        message: { type: string }
+    ValidationErrors:
+      type: object
+      properties:
+        message: { type: string }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+  responses:
+    JsonResponse:
+      description: Successful JSON response. Resource shape is operation-specific.
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - type: object
+                additionalProperties: true
+              - type: array
+                items:
+                  oneOf:
+                    - type: object
+                      additionalProperties: true
+                    - type: string
+    PostedDocument:
+      description: Business transaction accepted and posted.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/PostedDocument' }
+    Unauthorized:
+      description: Missing, invalid, or expired bearer token.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: User does not have permission or active tenant context.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource does not exist in the current organization or its file is missing.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationError:
+      description: Invalid request fields or a domain rule blocked the operation.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ValidationErrors' }
+    RateLimited:
+      description: Request rate limit exceeded.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }

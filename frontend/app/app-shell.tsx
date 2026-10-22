@@ -14,11 +14,13 @@ const nav: Array<[string, string, LucideIcon]> = [
   ["المبيعات","/sales",CircleDollarSign],
   ["العملاء","/customers",Users],
   ["المشتريات","/purchases",ClipboardList],
+  ["سجل الفواتير","/invoices",FileText],
   ["المنتجات","/products",Package],
   ["المخزون","/inventory",Box],
   ["المستودعات","/locations",Warehouse],
   ["السيارات والتوزيع","/trips",Truck],
   ["الموردين","/suppliers",Users],
+  ["مديونيات العملاء","/receivables",WalletCards],
   ["التحصيلات","/payments",WalletCards],
   ["المرتجعات","/returns",FileText],
   ["التقارير","/reports",BarChart3],
@@ -63,7 +65,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
           <div className="nav-section">النظام</div>
-          <button type="button"><Settings size={16}/><span>الإعدادات</span></button>
+          <Link href="/settings" className={"nav-link " + (pathname.startsWith("/settings") ? "active" : "")}><Settings size={16}/><span>الإعدادات والصلاحيات</span></Link>
         </nav>
 
         <div className="sidebar-bottom">

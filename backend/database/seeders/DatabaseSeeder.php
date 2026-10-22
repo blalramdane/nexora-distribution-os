@@ -13,7 +13,6 @@ class DatabaseSeeder extends Seeder
             EgyptGeographySeeder::class,
             ReferenceDataSeeder::class,
             DocumentSequenceSeeder::class,
-            DemoOrganizationSeeder::class,
         ]);
     }
 }

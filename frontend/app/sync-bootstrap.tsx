@@ -6,6 +6,11 @@ import { flushOfflineQueue } from "@/lib/sync";
 
 export default function SyncBootstrap() {
   useEffect(() => {
+    if ("serviceWorker" in navigator && window.isSecureContext) {
+      void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((error: unknown) => {
+        console.warn("NEXORA PWA service worker registration failed.", error);
+      });
+    }
     const flush = () => {
       if (navigator.onLine) void flushOfflineQueue(api);
     };

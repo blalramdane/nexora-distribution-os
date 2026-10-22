@@ -1,0 +1,50 @@
+# Repository metadata and local-only credentials
+.git
+.github
+.local-alpha-credentials.txt
+.tools
+node_modules
+**/node_modules
+vendor
+**/vendor
+.next
+**/.next
+
+# Never bake environment files, runtime secrets, or local databases into an image.
+**/.env
+**/.env.*
+**/*.sqlite
+**/*.sqlite3
+**/*.bak
+**/*.dump
+legacy-import/
+NEXORA_Customers*.csv
+*.pdf
+
+# Frontend local/build artifacts
+**/node_modules
+**/.next
+**/.next-e2e
+**/.npm-cache
+**/test-results
+**/playwright-report
+**/playwright/.cache
+frontend/AGENTS.md
+
+# Laravel runtime artifacts (fresh, container-owned storage is created in the image).
+backend/storage
+backend/.phpunit.result.cache
+
+# Keep API contract documents available to backend contract tests.
+# The planning files below remain excluded from the image build context.
+TASK_LOOP.md
+TASKS_REMAINING_AR.md
+PROJECT_STATUS.md
+EXECUTION_MASTER_PLAN.md
+README.md
+
+# Editor/OS files
+.idea
+.vscode
+**/.DS_Store
+**/Thumbs.db

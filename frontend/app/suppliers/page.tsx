@@ -1,35 +1,32 @@
 "use client";
 import { useEffect,useState } from "react";
-import { Plus, Search, Users } from "lucide-react";
+import Link from "next/link";
+import { Archive, ArchiveRestore, Building2, Phone, Plus, Search, ShieldCheck, Trash2, X, ArrowUpRight, MapPin } from "lucide-react";
 import { api } from "@/lib/api";
-
-type Supplier={id:string;name:string;code:string;phone?:string;status:string};
+type Supplier={id:string;name:string;code:string;phone?:string;tax_identifier?:string;tax_number?:string;address?:string;address_text?:string;active:boolean;status:string};
+type Form={name:string;code:string;phone:string;tax_number:string;address_text:string};
+const blank:Form={name:"",code:"",phone:"",tax_number:"",address_text:""};
 export default function Suppliers(){
- const [rows,setRows]=useState<Supplier[]>([]),[q,setQ]=useState(""),[open,setOpen]=useState(false),[msg,setMsg]=useState(""),[saving,setSaving]=useState(false);
- const [form,setForm]=useState({name:"",code:"",phone:"",address:"",credit_terms_days:""});
- const load=()=>api<Supplier[]>("/suppliers?q="+encodeURIComponent(q)).then(setRows).catch(e=>setMsg(e.message));
- useEffect(()=>{const t=setTimeout(load,200);return()=>clearTimeout(t)},[q]);
- const submit=async(e:React.FormEvent)=>{e.preventDefault();setSaving(true);setMsg("");
-  try{await api("/suppliers",{method:"POST",body:JSON.stringify({...form,code:form.code||null,credit_terms_days:Number(form.credit_terms_days||0)})});setOpen(false);setForm({name:"",code:"",phone:"",address:"",credit_terms_days:""});setMsg("تمت إضافة المورد بنجاح.");load();}
-  catch(err){setMsg(err instanceof Error?err.message:"تعذر إضافة المورد.");}finally{setSaving(false);}
- };
- return <main className="main">
-  <div className="topbar"><div><h1 className="title">الموردين</h1><div className="subtitle">Suppliers — المصدر والحسابات الدائنة</div></div><button className="primary" onClick={()=>setOpen(true)} style={{width:"auto",display:"flex",gap:7,alignItems:"center"}}><Plus size={15}/> مورد جديد</button></div>
-  {msg&&<div className="card" style={{marginBottom:12}}><span className="badge blue">{msg}</span></div>}
-  <div className="card" style={{marginBottom:12,display:"flex",gap:8}}><Search size={15}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="ابحث بالاسم أو الكود أو الهاتف..." style={{border:0,outline:0,flex:1}}/></div>
-  <div className="table-wrap"><table><thead><tr><th>المورد</th><th>الكود</th><th>الهاتف</th><th>الحالة</th></tr></thead><tbody>{rows.map(s=><tr key={s.id}><td><strong>{s.name}</strong></td><td>{s.code}</td><td>{s.phone||"—"}</td><td><span className="badge green">نشط</span></td></tr>)}{!rows.length&&<tr><td colSpan={4}>لا يوجد موردين. أضف موردًا لتجربة دورة الشراء.</td></tr>}</tbody></table></div>
-  {open&&<div className="modal-backdrop" onMouseDown={e=>e.currentTarget===e.target&&setOpen(false)}>
-   <form className="modal-card" onSubmit={submit}>
-    <div className="panel-title"><span>إضافة مورد</span><button type="button" className="secondary" onClick={()=>setOpen(false)}>إغلاق</button></div>
-    <div className="form-grid">
-      <label>اسم المورد<input required value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label>
-      <label>الكود<input value={form.code} onChange={e=>setForm({...form,code:e.target.value})} placeholder="اتركه تلقائيًا"/></label>
-      <label>الهاتف<input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
-      <label>أيام الائتمان<input type="number" min="0" value={form.credit_terms_days} onChange={e=>setForm({...form,credit_terms_days:e.target.value})}/></label>
-      <label style={{gridColumn:"1/-1"}}>العنوان<input value={form.address} onChange={e=>setForm({...form,address:e.target.value})}/></label>
-    </div>
-    <div className="form-actions"><button className="primary" disabled={saving}>{saving?"جاري الحفظ...":"حفظ المورد"}</button></div>
-   </form>
-  </div>}
+ const[rows,setRows]=useState<Supplier[]>([]),[q,setQ]=useState(""),[status,setStatus]=useState<"active"|"inactive">("active"),[open,setOpen]=useState(false),[saving,setSaving]=useState(false),[actionId,setActionId]=useState<string|null>(null),[loading,setLoading]=useState(true),[msg,setMsg]=useState(""),[form,setForm]=useState<Form>(blank);
+ const load=()=>{setLoading(true);return api<Supplier[]>(`/suppliers?q=${encodeURIComponent(q)}&status=${status}`).then(setRows).catch(e=>setMsg(e.message)).finally(()=>setLoading(false))};
+ useEffect(()=>{const t=setTimeout(()=>{void load()},200);return()=>clearTimeout(t)},[q,status]);
+ const save=async(e:React.FormEvent)=>{e.preventDefault();setSaving(true);setMsg("");try{await api<Supplier>("/suppliers",{method:"POST",body:JSON.stringify({...form,code:form.code||null,phone:form.phone||null,tax_number:form.tax_number||null,address_text:form.address_text||null})});setMsg("تمت إضافة المورد بنجاح.");setOpen(false);setForm(blank);await load()}catch(e){setMsg((e as Error).message)}finally{setSaving(false)}};
+ async function changeStatus(supplier:Supplier){
+  const archive=status==="active";
+  const prompt=archive?`هتخفي «${supplier.name}» من الموردين النشطين. فواتيره ومدفوعاته مش هتتمسح، وتقدر تستعيده لاحقًا. تكمل؟`:`استعادة «${supplier.name}» وإظهاره ضمن الموردين النشطين؟`;
+  if(!window.confirm(prompt))return;
+  setActionId(supplier.id);setMsg("");
+  try{const result=await api<{message:string}>(archive?`/suppliers/${supplier.id}`:`/suppliers/${supplier.id}/restore`,{method:archive?"DELETE":"POST"});setMsg(result.message);await load()}
+  catch(error){setMsg(error instanceof Error?error.message:"تعذر تحديث حالة المورد.")}
+  finally{setActionId(null)}
+ }
+ return <main className="main suppliers-page"><div className="topbar supplier-page-topbar"><div><span className="supplier-eyebrow">SUPPLIER MANAGEMENT</span><h1 className="title">إدارة الموردين</h1><div className="subtitle">ملفات الموردين وسياسات الأصناف وحركة المشتريات والمدفوعات، مع أرشفة آمنة تحفظ التاريخ المالي.</div></div><button className="primary" onClick={()=>{setMsg("");setOpen(true)}} style={{width:"auto",padding:"11px 15px",display:"flex",gap:7,alignItems:"center"}}><Plus size={15}/> إضافة مورد</button></div>
+ <div className="supplier-summary-grid"><div className="card supplier-summary"><span><Building2 size={16}/> الموردون {status==="active"?"النشطون":"المؤرشفون"}</span><strong>{rows.length.toLocaleString("ar-EG")}</strong><small>{loading?"جاري تحديث القائمة":"عدد النتائج المطابقة"}</small></div><div className="card supplier-summary"><span><ShieldCheck size={16}/> بيانات محفوظة</span><strong>100%</strong><small>الأرشفة لا تمسح الفواتير أو السداد التاريخي</small></div></div>
+ <section className="card supplier-directory-controls"><label className="supplier-directory-search"><Search size={16}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="ابحث باسم المورد أو الكود أو الهاتف..." aria-label="البحث عن مورد"/>{q&&<button type="button" onClick={()=>setQ("")} aria-label="مسح البحث"><X size={13}/></button>}</label><div className="supplier-directory-tabs"><button type="button" className={status==="active"?"selected":""} onClick={()=>setStatus("active")}><Building2 size={14}/> النشطون</button><button type="button" className={status==="inactive"?"selected":""} onClick={()=>setStatus("inactive")}><Archive size={14}/> الأرشيف</button></div></section>
+ {msg&&!open&&<div role="status" className="badge blue" style={{display:"block",padding:11,marginBottom:12,whiteSpace:"normal"}}>{msg}</div>}
+ {loading?<div className="card supplier-loading">جاري تحميل الموردين...</div>:<div className="supplier-directory-grid">{rows.map(s=><article className="card supplier-directory-card" key={s.id}><div className="supplier-card-head"><div className="supplier-card-avatar"><Building2 size={20}/></div><div className="supplier-card-title"><strong>{s.name}</strong><small>{s.code}</small></div><span className={`supplier-status ${s.active?"active":"inactive"}`}>{s.active?"نشط":"مؤرشف"}</span></div><div className="supplier-card-details"><span><Phone size={14}/>{s.phone||"لا يوجد هاتف مسجل"}</span><span><MapPin size={14}/>{s.address_text||s.address||"لا يوجد عنوان"}</span><span><ShieldCheck size={14}/>{s.tax_identifier||s.tax_number||"لا يوجد رقم ضريبي"}</span></div><div className="supplier-card-actions"><Link href={`/suppliers/${s.id}`} className="supplier-profile-action">فتح ملف المورد <ArrowUpRight size={14}/></Link>{status==="active"?<button type="button" className="supplier-archive-action" disabled={actionId===s.id} onClick={()=>void changeStatus(s)}><Archive size={14}/>{actionId===s.id?"جارٍ الأرشفة":"حذف / أرشفة"}</button>:<button type="button" className="supplier-restore-action" disabled={actionId===s.id} onClick={()=>void changeStatus(s)}><ArchiveRestore size={14}/>{actionId===s.id?"جارٍ الاستعادة":"استعادة المورد"}</button>}</div></article>)}{!rows.length&&<div className="card supplier-empty"><Building2 size={28}/><strong>{status==="active"?"لا يوجد موردون نشطون مطابقون":"الأرشيف فارغ"}</strong><span>{q?"جرّب البحث بكلمة أخرى.":status==="active"?"أضف الموردين الذين تتعامل معهم لتبدأ تسجيل مشترياتهم.":"أي مورد تؤرشفه سيظهر هنا ويمكنك استعادته."}</span></div>}</div>}
+ {open&&<div style={{position:"fixed",inset:0,background:"#0b173080",display:"grid",placeItems:"center",zIndex:50,padding:18}}><form className="card" onSubmit={save} style={{width:"min(680px,100%)",maxHeight:"90vh",overflow:"auto"}}><div className="panel-title"><span style={{fontSize:15}}>إضافة مورد جديد</span><button type="button" className="icon-btn" onClick={()=>setOpen(false)}><X size={14}/></button></div><div className="form-grid">
+ <label>اسم المورد *<input required maxLength={255} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label><label>الكود<input maxLength={64} value={form.code} onChange={e=>setForm({...form,code:e.target.value})} placeholder="يتولد تلقائيًا"/></label><label>رقم الهاتف<input maxLength={32} value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></label><label>الرقم الضريبي<input maxLength={128} value={form.tax_number} onChange={e=>setForm({...form,tax_number:e.target.value})}/></label><label style={{gridColumn:"1 / -1"}}>العنوان<input value={form.address_text} onChange={e=>setForm({...form,address_text:e.target.value})}/></label>
+ </div>{msg&&<div style={{marginTop:10}} className="badge blue">{msg}</div>}<div style={{display:"flex",gap:8,marginTop:14,justifyContent:"flex-end"}}><button type="button" className="icon-btn" onClick={()=>setOpen(false)}>إلغاء</button><button className="primary" disabled={saving}>{saving?"جاري الحفظ...":"حفظ المورد"}</button></div></form></div>}
  </main>
 }

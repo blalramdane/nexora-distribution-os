@@ -25,7 +25,7 @@ class PartyBalanceProjectionTest extends TestCase
         app(TransactionPostingService::class)->postSale($org->id,[
             'customer_id'=>$customer,'location_id'=>$location,'items'=>[[
                 'product_id'=>$product,'quantity'=>1,'conversion_factor'=>1,'unit_price'=>100,'unit_id'=>$unit,
-            ]],'paid_amount'=>30,'created_by'=>$user->id,
+            ]],'paid_amount'=>30,...$this->salePaymentFields($org->id),'created_by'=>$user->id,
         ]);
 
         $row=DB::table('customer_balance_summaries')->where('organization_id',$org->id)->where('customer_id',$customer)->first();
@@ -66,6 +66,16 @@ class PartyBalanceProjectionTest extends TestCase
         DB::table('customers')->insert(['id'=>$customer,'organization_id'=>$org->id,'code'=>'CUS-01','name'=>'Test Customer','normalized_name'=>'test customer','status'=>'active','created_at'=>now(),'updated_at'=>now()]);
         $location=(string)Str::ulid();
         DB::table('locations')->insert(['id'=>$location,'organization_id'=>$org->id,'code'=>'WH-01','name'=>'Main Warehouse','type'=>'warehouse','status'=>'active','created_at'=>now(),'updated_at'=>now()]);
+        DB::table('financial_accounts')->insert(['id'=>(string)Str::ulid(),'organization_id'=>$org->id,'code'=>'PROJECTION-CASH','name'=>'Projection cash','type'=>'cash','currency'=>'EGP','opening_balance'=>0,'active'=>true,'created_at'=>now(),'updated_at'=>now()]);
+        DB::table('payment_methods')->insert(['id'=>(string)Str::ulid(),'organization_id'=>$org->id,'code'=>'PROJECTION-CASH','name_ar'=>'نقدي اختبار','name_en'=>'Projection cash','requires_reference'=>false,'active'=>true,'created_at'=>now(),'updated_at'=>now()]);
         return [$org,$user,$unit,$product,$customer,$location];
+    }
+
+    private function salePaymentFields(string $organizationId): array
+    {
+        return [
+            'financial_account_id' => DB::table('financial_accounts')->where('organization_id', $organizationId)->where('code', 'PROJECTION-CASH')->value('id'),
+            'payment_method_id' => DB::table('payment_methods')->where('organization_id', $organizationId)->where('code', 'PROJECTION-CASH')->value('id'),
+        ];
     }
 }

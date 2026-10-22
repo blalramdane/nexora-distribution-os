@@ -76,7 +76,9 @@ class PurchaseCostingTest extends TestCase
                 'packaging_id'=>$packaging,
                 'unit_id'=>$cartonUnit,
                 'quantity'=>1,
-                'conversion_factor'=>10,
+                // The API must use the saved packaging conversion, not trust
+                // a client-supplied factor that could inflate received stock.
+                'conversion_factor'=>999,
                 'unit_cost'=>100,
             ]],
         ]);
@@ -100,5 +102,35 @@ class PurchaseCostingTest extends TestCase
         $this->assertSame('10.0000', number_format((float)$item->unit_cost_base, 4, '.', ''));
         $this->assertSame('10.0000', number_format((float)$movement->unit_cost, 4, '.', ''));
         $this->assertSame('100.0000', number_format((float)$item->line_total, 4, '.', ''));
+
+        $baseUnitPurchase = app(TransactionPostingService::class)->postPurchase($org->id, [
+            'supplier_id' => $supplier,
+            'location_id' => $location,
+            'created_by' => $user->id,
+            'idempotency_key' => (string) Str::uuid(),
+            'items' => [[
+                'product_id' => $product,
+                'unit_id' => $unit,
+                'quantity' => 1,
+                // A base-unit line always converts 1:1. Client input must not
+                // be able to turn one piece into 999 pieces of stock.
+                'conversion_factor' => 999,
+                'unit_cost' => 20,
+            ]],
+        ]);
+
+        $baseUnitItem = DB::table('purchase_invoice_items')
+            ->where('organization_id', $org->id)
+            ->where('purchase_invoice_id', $baseUnitPurchase['id'])
+            ->first();
+        $updatedBalance = DB::table('stock_balances')
+            ->where('organization_id', $org->id)
+            ->where('product_id', $product)
+            ->where('location_id', $location)
+            ->first();
+
+        $this->assertSame('1.000000', number_format((float)$baseUnitItem->conversion_factor_snapshot, 6, '.', ''));
+        $this->assertSame('1.000000', number_format((float)$baseUnitItem->quantity_base, 6, '.', ''));
+        $this->assertSame('11.000000', number_format((float)$updatedBalance->quantity_base, 6, '.', ''));
     }
 }

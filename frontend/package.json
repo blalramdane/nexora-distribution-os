@@ -5,17 +5,24 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:e2e": "node scripts/build-e2e.mjs",
     "start": "next start",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:unit": "node --test lib/format-stock-quantity.test.mjs lib/idempotency.test.mjs lib/invoice-ocr.test.mjs lib/purchase-line-validation.test.mjs lib/xlsx-export.test.mjs lib/report-print.test.mjs",
+    "test:e2e": "npm run build:e2e && playwright test"
   },
   "dependencies": {
     "dexie": "^4.2.1",
+    "html2pdf.js": "^0.14.0",
     "lucide-react": "^0.468.0",
     "next": "^16.4.0",
+    "pdfjs-dist": "^6.4.299",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

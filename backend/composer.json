@@ -51,12 +51,15 @@
     ],
     "test": [
       "@php artisan config:clear",
-      "@php artisan test"
+      "@php vendor/bin/phpunit -c phpunit.xml"
     ]
   },
   "extra": {
     "laravel": {
-      "dont-discover": []
+      "dont-discover": [
+        "laravel/pail",
+        "nunomaduro/collision"
+      ]
     }
   },
   "minimum-stability": "stable",

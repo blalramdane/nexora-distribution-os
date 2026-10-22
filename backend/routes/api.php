@@ -1,67 +1,152 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\AccessController;
 use App\Http\Controllers\Api\V1\CatalogController;
+use App\Http\Controllers\Api\V1\CashboxController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\ExpenseController;
+use App\Http\Controllers\Api\V1\FieldController;
+use App\Http\Controllers\Api\V1\FieldRepController;
+use App\Http\Controllers\Api\V1\FinanceReferenceController;
 use App\Http\Controllers\Api\V1\InventoryController;
+use App\Http\Controllers\Api\V1\InvoiceShareController;
+use App\Http\Controllers\Api\V1\InvoiceRegisterController;
 use App\Http\Controllers\Api\V1\LocationController;
+use App\Http\Controllers\Api\V1\OrganizationSettingsController;
+use App\Http\Controllers\Api\V1\PaymentController;
 use App\Http\Controllers\Api\V1\PurchaseController;
+use App\Http\Controllers\Api\V1\PurchaseInvoiceImportController;
+use App\Http\Controllers\Api\V1\ReportController;
+use App\Http\Controllers\Api\V1\ReturnController;
 use App\Http\Controllers\Api\V1\SalesController;
 use App\Http\Controllers\Api\V1\SupplierController;
-use App\Http\Controllers\Api\V1\FinanceReferenceController;
-use App\Http\Controllers\Api\V1\PaymentController;
-use App\Http\Controllers\Api\V1\ReturnController;
-use App\Http\Controllers\Api\V1\TripLoadController;
+use App\Http\Controllers\Api\V1\SyncController;
 use App\Http\Controllers\Api\V1\TripController;
+use App\Http\Controllers\Api\V1\TripLoadController;
 use App\Http\Controllers\Api\V1\TripSettlementController;
-use App\Http\Controllers\Api\V1\FieldController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/v1/health', static fn () => response()->json(['status'=>'ok','service'=>'nexora-distribution-api']));
+Route::get('/v1/health', static fn () => response()->json([
+    'status' => 'ok',
+    'service' => 'nexora-distribution-api',
+]));
 
 Route::prefix('v1')->group(function (): void {
     Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+    Route::get('/shared/invoice/{token}', [InvoiceShareController::class, 'showPublic'])->middleware('throttle:30,1');
 
-    if (app()->environment(['local','testing'])) {
-        Route::post('/auth/demo', [AuthController::class, 'demoLogin'])->middleware('throttle:5,1');
-    }
-
-    Route::middleware(['auth:sanctum','tenant'])->group(function (): void {
+    Route::middleware(['auth:sanctum', 'tenant'])->group(function (): void {
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
-        Route::get('/dashboard', [DashboardController::class, 'index']);
-
-        Route::get('/products', [CatalogController::class, 'products']);
-        Route::get('/products/meta', [CatalogController::class, 'meta']);
-        Route::post('/products', [CatalogController::class, 'storeProduct']);
-
-        Route::get('/customers', [CustomerController::class, 'index']);
-        Route::post('/customers', [CustomerController::class, 'store']);
-
-        Route::get('/suppliers', [SupplierController::class, 'index']);
-        Route::post('/suppliers', [SupplierController::class, 'store']);
-
-        Route::get('/finance/references', [FinanceReferenceController::class, 'index']);
-        Route::get('/inventory', [InventoryController::class, 'index']);
-        Route::get('/locations', [LocationController::class, 'index']);
-
-        Route::post('/purchases', [PurchaseController::class, 'store']);
-        Route::post('/sales', [SalesController::class, 'store']);
-        Route::post('/payments', [PaymentController::class, 'store']);
-        Route::post('/returns/sales', [ReturnController::class, 'sales']);
-        Route::post('/returns/purchases', [ReturnController::class, 'purchases']);
-
-        Route::get('/trips', [TripController::class, 'index']);
-        Route::get('/vehicles', [TripController::class, 'vehicles']);
-        Route::post('/trips', [TripController::class, 'store']);
-        Route::get('/trips/{trip}/stock', [TripController::class, 'stock']);
-        Route::post('/trips/{trip}/customers', [TripController::class, 'assignCustomer']);
-        Route::post('/trip-loads', [TripLoadController::class, 'store']);
-        Route::post('/trip-settlements', [TripSettlementController::class, 'store']);
-
-        Route::get('/field/today', [FieldController::class, 'today']);
-        Route::post('/field/visits', [FieldController::class, 'visit']);
-        Route::post('/field/customers', [FieldController::class, 'createCustomer']);
+        Route::get('/admin/access', [AccessController::class, 'index'])->middleware('permission:users.manage');
+        Route::get('/settings', [OrganizationSettingsController::class, 'show'])->middleware('permission:settings.manage');
+        Route::put('/settings', [OrganizationSettingsController::class, 'update'])->middleware('permission:settings.manage');
+        Route::post('/admin/roles', [AccessController::class, 'storeRole'])->middleware('permission:users.manage');
+        Route::post('/admin/users', [AccessController::class, 'storeUser'])->middleware('permission:users.manage');
+        Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('permission:dashboard.view');
+        Route::get('/reports', [ReportController::class, 'index'])->middleware('permission:reports.view');
+        Route::get('/invoice-register', [InvoiceRegisterController::class, 'index'])->middleware('permission:reports.view');
+        Route::get('/cashbox', [CashboxController::class, 'index'])->middleware('permission:cashbox.view');
+        Route::get('/cashbox/beneficiaries', [CashboxController::class, 'beneficiaries'])->middleware('permission:cashbox.view');
+        Route::post('/cashbox', [CashboxController::class, 'store'])->middleware('permission:cashbox.post');
+        Route::get('/sales/history', [SalesController::class, 'history'])->middleware('permission:sales.view');
+        Route::get('/sales/open-balances', [SalesController::class, 'openBalances'])->middleware('permission:sales.view');
+        Route::get('/sales/invoices/{invoiceId}', [SalesController::class, 'show'])->middleware('permission:sales.view');
+        Route::get('/sales/invoices/{invoiceId}/items', [SalesController::class, 'invoiceItems'])->middleware('permission:sales.view');
+        Route::get('/products', [CatalogController::class, 'products'])->middleware('permission:products.view');
+        Route::get('/products/{productId}', [CatalogController::class, 'showProduct'])->middleware('permission:products.view');
+        Route::get('/catalog/pos', [CatalogController::class, 'posCatalog'])->middleware('permission:products.view');
+        Route::get('/catalog/references', [CatalogController::class, 'references'])->middleware('permission:products.view');
+        Route::post('/products', [CatalogController::class, 'storeProduct'])->middleware('permission:products.manage');
+        Route::put('/products/{productId}', [CatalogController::class, 'updateProduct'])->middleware('permission:products.manage');
+        Route::delete('/products/{productId}', [CatalogController::class, 'destroyProduct'])->middleware('permission:products.manage');
+        Route::post('/products/{productId}/restore', [CatalogController::class, 'restoreProduct'])->middleware('permission:products.manage');
+        Route::post('/products/{productId}/suppliers', [CatalogController::class, 'storeSupplierProduct'])->middleware('permission:products.manage');
+        Route::post('/categories', [CatalogController::class, 'storeCategory'])->middleware('permission:products.manage');
+        Route::get('/customers', [CustomerController::class, 'index'])->middleware('permission:customers.view');
+        Route::get('/customers/{customerId}/prices', [CustomerController::class, 'prices'])->middleware('permission:customers.view');
+        Route::put('/customers/{customerId}/prices', [CustomerController::class, 'savePrice'])->middleware('permission:customers.manage');
+        Route::patch('/customers/{customerId}', [CustomerController::class, 'update'])->middleware('permission:customers.manage');
+        Route::get('/customers/{customerId}/360', [CustomerController::class, 'show360'])->middleware('permission:customers.view');
+        Route::get('/sales/invoices', [SalesController::class, 'openInvoices'])->middleware('permission:sales.view');
+        Route::get('/suppliers', [SupplierController::class, 'index'])->middleware('permission:suppliers.view');
+        Route::delete('/suppliers/{supplierId}', [SupplierController::class, 'destroy'])->middleware('permission:suppliers.manage');
+        Route::post('/suppliers/{supplierId}/restore', [SupplierController::class, 'restore'])->middleware('permission:suppliers.manage');
+        Route::get('/suppliers/{supplierId}/360', [SupplierController::class, 'show360'])->middleware('permission:suppliers.view');
+        Route::get('/suppliers/{supplierId}/rebates', [SupplierController::class, 'rebates'])->middleware('permission:suppliers.view');
+        Route::post('/suppliers/{supplierId}/rebates', [SupplierController::class, 'storeRebate'])->middleware('permission:suppliers.manage');
+        Route::get('/suppliers/{supplierId}/trip-settlements', [SupplierController::class, 'tripSettlements'])->middleware('permission:suppliers.view');
+        Route::get('/suppliers/{supplierId}/products', [SupplierController::class, 'products'])->middleware('permission:suppliers.view');
+        Route::put('/suppliers/{supplierId}/products/{productId}/settlement', [SupplierController::class, 'updateProductSettlement'])->middleware('permission:suppliers.manage');
+        Route::post('/suppliers', [SupplierController::class, 'store'])->middleware('permission:suppliers.manage');
+        Route::get('/finance/references', [FinanceReferenceController::class, 'index'])->middleware('permission:settings.manage');
+        Route::post('/finance/accounts', [FinanceReferenceController::class, 'storeAccount'])->middleware('permission:settings.manage');
+        Route::post('/finance/payment-methods', [FinanceReferenceController::class, 'storePaymentMethod'])->middleware('permission:settings.manage');
+        Route::get('/sales/payment-references', [FinanceReferenceController::class, 'index'])->middleware('permission:sales.post');
+        Route::post('/customers', [CustomerController::class, 'store'])->middleware('permission:customers.manage');
+        Route::post('/customers/import-contacts', [CustomerController::class, 'importContacts'])->middleware('permission:customers.manage');
+        Route::get('/inventory', [InventoryController::class, 'index'])->middleware('permission:inventory.view');
+        Route::get('/inventory/summary', [InventoryController::class, 'summary'])->middleware('permission:inventory.view');
+        Route::get('/inventory/movements', [InventoryController::class, 'movements'])->middleware('permission:inventory.view');
+        Route::get('/inventory/stocktakes', [InventoryController::class, 'stocktakes'])->middleware('permission:inventory.view');
+        Route::post('/inventory/stocktakes/{stocktakeId}/review', [InventoryController::class, 'reviewStocktake'])->middleware('permission:inventory.adjust');
+        Route::post('/inventory/adjust', [InventoryController::class, 'adjust'])->middleware('permission:inventory.adjust');
+        Route::post('/inventory/transfers', [InventoryController::class, 'transfer'])->middleware('permission:inventory.adjust');
+        Route::get('/locations', [LocationController::class, 'index'])->middleware('permission:inventory.view');
+        Route::post('/locations', [LocationController::class, 'store'])->middleware('permission:inventory.adjust');
+        Route::post('/purchases', [PurchaseController::class, 'store'])->middleware('permission:purchases.post');
+        Route::get('/purchases/open-balances', [PurchaseController::class, 'openBalances'])->middleware('permission:purchases.view');
+        Route::get('/purchases/source-trace', [PurchaseController::class, 'sourceTrace'])->middleware('permission:purchases.view');
+        Route::get('/purchases/history', [PurchaseController::class, 'history'])->middleware('permission:purchases.view');
+        Route::get('/purchases/invoices/{invoiceId}', [PurchaseController::class, 'showInvoice'])->middleware('permission:purchases.view');
+        Route::get('/purchases/invoices/{invoiceId}/items', [PurchaseController::class, 'invoiceItems'])->middleware('permission:purchases.view');
+        Route::get('/purchase-imports', [PurchaseInvoiceImportController::class, 'index'])->middleware('permission:purchases.view');
+        Route::post('/purchase-imports', [PurchaseInvoiceImportController::class, 'store'])->middleware('permission:purchases.post');
+        Route::put('/purchase-imports/{documentId}/extraction', [PurchaseInvoiceImportController::class, 'saveExtraction'])->middleware('permission:purchases.post');
+        Route::get('/purchase-imports/{documentId}/file', [PurchaseInvoiceImportController::class, 'file'])->middleware('permission:purchases.view');
+        Route::get('/invoice-shares', [InvoiceShareController::class, 'index']);
+        Route::post('/invoice-shares', [InvoiceShareController::class, 'store']);
+        Route::delete('/invoice-shares/{shareId}', [InvoiceShareController::class, 'revoke']);
+        Route::post('/sales', [SalesController::class, 'store'])->middleware('permission:sales.post');
+        Route::post('/payments', [PaymentController::class, 'store'])->middleware('permission:payments.record');
+        Route::get('/expenses', [ExpenseController::class, 'index'])->middleware('permission:expenses.view');
+        Route::post('/expenses', [ExpenseController::class, 'store'])->middleware('permission:expenses.post');
+        Route::post('/returns/sales', [ReturnController::class, 'sales'])->middleware('permission:sales.post');
+        Route::post('/returns/purchases', [ReturnController::class, 'purchases'])->middleware('permission:purchases.post');
+        Route::get('/trips', [TripController::class, 'index'])->middleware('permission:trips.view');
+        Route::get('/vehicles', [TripController::class, 'vehicles'])->middleware('permission:trips.view');
+        Route::post('/trips', [TripController::class, 'store'])->middleware('permission:trips.manage');
+        Route::patch('/trips/{trip}', [TripController::class, 'update'])->middleware('permission:trips.manage');
+        Route::delete('/trips/archive-all', [TripController::class, 'archiveAll'])->middleware('permission:trips.manage');
+        Route::delete('/trips/cleanup-empty', [TripController::class, 'cleanupEmpty'])->middleware('permission:trips.manage');
+        Route::delete('/trips/{trip}', [TripController::class, 'destroy'])->middleware('permission:trips.manage');
+        Route::post('/trips/{trip}/restore', [TripController::class, 'restore'])->middleware('permission:trips.manage');
+        Route::get('/field/reps', [FieldRepController::class, 'index'])->middleware('permission:trips.view');
+        Route::post('/field/reps', [FieldRepController::class, 'store'])->middleware('permission:trips.manage');
+        Route::get('/trips/{trip}/stock', [TripController::class, 'stock'])->middleware('permission:trips.view');
+        Route::get('/trips/{trip}/profit', [TripController::class, 'profit'])->middleware('permission:trips.view');
+        Route::get('/trips/{trip}/report', [TripController::class, 'detailedReport'])->middleware('permission:trips.view');
+        Route::post('/trips/{trip}/customers', [TripController::class, 'assignCustomer'])->middleware('permission:trips.manage');
+        Route::get('/trips/{trip}/route', [TripController::class, 'route'])->middleware('permission:trips.view');
+        Route::post('/trips/{trip}/route/optimize', [TripController::class, 'optimizeRoute'])->middleware('permission:trips.manage');
+        Route::post('/trips/{trip}/route/reorder', [TripController::class, 'reorderRoute'])->middleware('permission:trips.manage');
+        Route::get('/trips/{trip}/supplier-settlement', [TripSettlementController::class, 'preview'])->middleware('permission:trips.view');
+        Route::post('/trip-loads', [TripLoadController::class, 'store'])->middleware('permission:inventory.adjust');
+        Route::post('/trip-settlements', [TripSettlementController::class, 'store'])->middleware('permission:payments.record');
+        Route::post('/sync/device', [SyncController::class, 'registerDevice'])->middleware('permission:field.sync');
+        Route::post('/sync/operations', [SyncController::class, 'store'])->middleware('permission:field.sync');
+        Route::get('/field/today', [FieldController::class, 'today'])->middleware('permission:field.visit');
+        Route::get('/field/references', [FieldController::class, 'references'])->middleware('permission:field.visit');
+        Route::get('/field/customer-prices', [FieldController::class, 'customerPrices'])->middleware('permission:field.visit');
+        Route::get('/field/catalog', [FieldController::class, 'catalogForTrip'])->middleware('permission:field.visit');
+        Route::get('/field/expenses', [FieldController::class, 'expensesForTrip'])->middleware('permission:field.visit');
+        Route::get('/field/stocktake', [FieldController::class, 'stocktakeForTrip'])->middleware('permission:field.visit');
+        Route::post('/field/stocktake', [FieldController::class, 'submitStocktake'])->middleware('permission:field.visit');
+        Route::get('/field/sales', [FieldController::class, 'salesForTrip'])->middleware('permission:field.visit');
+        Route::get('/field/sales/{invoiceId}/items', [FieldController::class, 'salesInvoiceItems'])->middleware('permission:field.visit');
+        Route::post('/field/visits', [FieldController::class, 'visit'])->middleware('permission:field.visit');
+        Route::post('/field/customers', [FieldController::class, 'createCustomer'])->middleware('permission:field.visit');
     });
 });
