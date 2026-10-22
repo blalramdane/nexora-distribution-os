@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # TEMPORARY ops bridge for the one-time migration window; deleted from the
 # account right after the data migration completes. Runs no app data services.
 FROM node:22-alpine
